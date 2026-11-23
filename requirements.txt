@@ -11,3 +11,5 @@ xgboost
 joblib
 streamlit
 requests
+matplotlib
+numpy
