@@ -76,11 +76,11 @@ class ForecastRequest(BaseModel):
 def _run_forecast(machine_id: str, hours_ahead: int):
     if forecast is None:
         raise HTTPException(503, "Model forecast belum tersedia")
-    return {
-        "machine_id": machine_id,
-        "hours_ahead": hours_ahead,
-        "predictions": forecast(machine_id, hours_ahead),
-    }
+    try:
+        preds = forecast(machine_id, hours_ahead)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    return {"machine_id": machine_id, "hours_ahead": hours_ahead, "predictions": preds}
 
 
 @router.post("/forecast")
