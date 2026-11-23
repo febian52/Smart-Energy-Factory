@@ -1,0 +1,39 @@
+{
+  "energy_csv": "C:\\Users\\jovan\\Smart-Energy-Factory\\ml\\anomaly\\data\\energy_readings_sample.csv",
+  "total_rows": 103680,
+  "contamination": 0.04,
+  "detected_anomalies": 4148,
+  "eda": {
+    "total_rows": 103680,
+    "unique_machines": 12,
+    "start_time": "2026-01-01T00:00:00Z",
+    "end_time": "2026-01-30T23:55:00Z",
+    "status_counts": {
+      "running": 58245,
+      "off": 31296,
+      "idle": 14139
+    },
+    "waste_count": 4008,
+    "waste_rate_pct": 3.87,
+    "waste_type_counts": {
+      "none": 99672,
+      "idle_high_power": 1701,
+      "running_no_production": 1306,
+      "spike": 1001
+    }
+  },
+  "label_col": "is_waste",
+  "precision": 0.614,
+  "recall": 0.6355,
+  "f1_score": 0.6246,
+  "confusion_matrix": [
+    [
+      98071,
+      1601
+    ],
+    [
+      1461,
+      2547
+    ]
+  ]
+}
