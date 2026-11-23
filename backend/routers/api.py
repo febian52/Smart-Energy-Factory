@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Query
 from database.db import get_db
+from fastapi import HTTPException
+from pydantic import BaseModel
 
 router = APIRouter()
 TARIF_PER_KWH = 1500  # Rp per kWh (asumsi), sebutkan di artikel
@@ -54,3 +56,49 @@ def summary():
         "per_line": {k: round(v, 2) for k, v in per_line.items()},
         "alert_count": db.waste_alerts.count_documents({}),
     }
+
+try:
+    from ml.forecast.predict import forecast
+except ImportError:
+    forecast = None
+
+try:
+    from ml.anomaly.detect import detect_waste
+except ImportError:
+    detect_waste = None
+
+
+class ForecastRequest(BaseModel):
+    machine_id: str
+    hours_ahead: int = 24
+
+
+def _run_forecast(machine_id: str, hours_ahead: int):
+    if forecast is None:
+        raise HTTPException(503, "Model forecast belum tersedia")
+    return {
+        "machine_id": machine_id,
+        "hours_ahead": hours_ahead,
+        "predictions": forecast(machine_id, hours_ahead),
+    }
+
+
+@router.post("/forecast")
+def post_forecast(req: ForecastRequest):
+    return _run_forecast(req.machine_id, req.hours_ahead)
+
+
+@router.get("/forecast/{machine_id}")
+def get_forecast(machine_id: str, hours_ahead: int = 24):
+    return _run_forecast(machine_id, hours_ahead)
+
+
+@router.get("/waste-alerts")
+def waste_alerts(
+    machine_id: str,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+):
+    if detect_waste is None:
+        raise HTTPException(503, "Model deteksi pemborosan belum tersedia")
+    return detect_waste(machine_id, start, end)
