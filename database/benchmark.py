@@ -170,13 +170,19 @@ def run_query(db, q, timeout_ms):
     return (time.perf_counter() - t0) * 1000.0, n
 
 
-def explain_query(db, q, timeout_ms):
+def explain_query(db, q, timeout_ms, timed_out=False):
     if q["kind"] == "find":
-        inner = {"find": q["coll"], "filter": q["filter"], "sort": {"timestamp": 1}, "maxTimeMS": timeout_ms}
+        inner = {"find": q["coll"], "filter": q["filter"], "sort": {"timestamp": 1}}
     else:
-        inner = {"aggregate": q["coll"], "pipeline": q["pipeline"], "cursor": {}, "allowDiskUse": True,
-                 "maxTimeMS": timeout_ms}
-    return db.command({"explain": inner, "verbosity": "executionStats"})
+        inner = {"aggregate": q["coll"], "pipeline": q["pipeline"], "cursor": {}, "allowDiskUse": True}
+
+    mode = "queryPlanner" if timed_out else "executionStats"
+    try:
+        return db.command(
+            {"explain": inner, "verbosity": mode, "maxTimeMS": timeout_ms}
+        )
+    except Exception:
+        return {}
 
 
 def _walk(o):
@@ -225,8 +231,9 @@ def bench_queries(db, label, indexed, repeats, timeout_ms, interval):
                        max_ms=round(max(times), 1), result_rows=n)
         except ExecutionTimeout:
             row["note"] = f"timeout > {timeout_ms // 1000} s"
+        is_timeout = any("timeout" in str(v).lower() for v in row.values())
         try:
-            row.update(summarize_explain(explain_query(db, q, timeout_ms)))
+            row.update(summarize_explain(explain_query(db, q, timeout_ms, timed_out=is_timeout)))
         except ExecutionTimeout:
             row["note"] = (row["note"] + "; explain timeout").strip("; ")
         except OperationFailure as e:
