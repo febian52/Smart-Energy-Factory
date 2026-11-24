@@ -98,6 +98,19 @@ try:
             t = a.get("type", "unknown")
             alert_type_counts[t] = alert_type_counts.get(t, 0) + 1
 
+        # Pengambilan Data Time-Series Pembacaan Sensor
+        all_readings: list[dict] = []
+        data_is_truncated = False
+
+        if machines:
+            for m in machines:
+                mid = m.get("machine_id")
+                rows = get_energy(mid, start=start_dt, end=end_dt, limit=10000)
+                if len(rows) >= 10000:
+                    data_is_truncated = True
+                if rows:
+                    all_readings.extend(rows)
+
 except RuntimeError as exc:
     st.error(
         f"🚨 **Gagal memuat data dari API Backend:**\n\n`{exc}`\n\n"
@@ -109,55 +122,19 @@ except Exception as exc:
     st.error(f"Terjadi kesalahan saat memproses data: {exc}", icon="⚠️")
     st.stop()
 
-# ---------------------------------------------------------------------------
-# Header Halaman & Segmented Filter Control (Top Bar)
-# ---------------------------------------------------------------------------
-header_col1, header_col2 = st.columns([2.2, 1.2])
-
-with header_col1:
-    st.markdown(
-        """
-        <div style="margin-bottom: 12px;">
-            <h1 style="color: #1F1A17; font-size: 2.2rem; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.03em;">
-                Energy Dashboard Overview
-            </h1>
-            <div style="font-size: 12px; font-weight: 700; color: #6B6259; text-transform: uppercase; letter-spacing: 0.08em;">
-                // SITE: PLANT-01 · PRODUCTION LINE A & B · NOVEMBER 2026
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with header_col2:
-    view_granularity = st.radio(
-        "Tampilan",
-        options=["Hourly", "Daily"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-
-# ---------------------------------------------------------------------------
-# Pengambilan Data Time-Series Pembacaan Sensor
-# ---------------------------------------------------------------------------
-all_readings: list[dict] = []
-data_is_truncated = False
-
-if machines:
-    for m in machines:
-        mid = m.get("machine_id")
-        rows = get_energy(mid, start=start_dt, end=end_dt, limit=10000)
-        if len(rows) >= 10000:
-            data_is_truncated = True
-        if rows:
-            all_readings.extend(rows)
-
 if data_is_truncated:
     st.warning("⚠️ **Peringatan Batas Data:** Data pembacaan energi mencapai batas maksimal 10.000 baris. Beberapa data mungkin terpotong.")
 
 total_kwh = summary_data.get("total_kwh", 0.0) if summary_data else 0.0
 cost_rp = summary_data.get("estimated_cost_rp", 0) if summary_data else 0
 total_rated_kw = sum(float(m.get("rated_power_kw", 0)) for m in machines) if machines else 1.0
+
+# Derivasi informasi lini produksi dari get_machines()
+unique_lines = sorted(list({str(m.get("line")).strip() for m in machines if m.get("line")}))
+if unique_lines:
+    lines_str = f"{len(unique_lines)} LINI PRODUKSI ({', '.join(unique_lines).upper()})"
+else:
+    lines_str = f"{len(machines)} MESIN"
 
 # ---------------------------------------------------------------------------
 # Pemrosesan Data & Konversi Waktu UTC ke WIB
@@ -171,7 +148,15 @@ if all_readings:
     df_readings["hour_wib"] = df_readings["timestamp_wib"].dt.floor("h")
     df_readings["date_wib"] = df_readings["timestamp_wib"].dt.date
 
-    # Deret TOTAL daya & energi semua mesin per jam
+    # Derivasi rentang periode dari data yang tampil dalam format WIB
+    min_wib = df_readings["timestamp_wib"].min().strftime("%d %b %Y").upper()
+    max_wib = df_readings["timestamp_wib"].max().strftime("%d %b %Y").upper()
+    if min_wib == max_wib:
+        period_str = f"PERIODE: {min_wib} (WIB)"
+    else:
+        period_str = f"PERIODE: {min_wib} – {max_wib} (WIB)"
+
+    # Deret TOTAL daya semua mesin per jam
     hourly_total = (
         df_readings.groupby("hour_wib", as_index=False)
         .agg({"power_kw": "sum", "energy_kwh": "sum"})
@@ -219,12 +204,44 @@ if all_readings:
     pct_idle_val = (idle_kwh / tot_status_kwh * 100) if tot_status_kwh > 0 else 0.0
 
 else:
+    period_str = f"PERIODE: {start_dt.strftime('%d %b %Y').upper()} – {end_dt.strftime('%d %b %Y').upper()} (WIB)"
     hourly_total = pd.DataFrame()
     cur_power, min_power, max_power, avg_power = 0.0, 0.0, 0.0, 0.0
     utilisasi_pct = 0.0
     run_kwh, idle_kwh = 0.0, 0.0
     pct_run_val, pct_idle_val = 0.0, 0.0
     delta_html = '<span style="color:#6B6259; font-size:12px;">—</span>'
+
+# Subjudul halaman diturunkan langsung dari data
+subjudul_halaman = f"// {lines_str} · {period_str}"
+
+# ---------------------------------------------------------------------------
+# Header Halaman & Segmented Filter Control (Top Bar)
+# ---------------------------------------------------------------------------
+header_col1, header_col2 = st.columns([2.2, 1.2])
+
+with header_col1:
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 12px;">
+            <h1 style="color: #1F1A17; font-size: 2.2rem; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.03em;">
+                Energy Dashboard Overview
+            </h1>
+            <div style="font-size: 12px; font-weight: 700; color: #6B6259; text-transform: uppercase; letter-spacing: 0.08em;">
+                {subjudul_halaman}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with header_col2:
+    view_granularity = st.radio(
+        "Tampilan",
+        options=["Hourly", "Daily"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
 
 # ---------------------------------------------------------------------------
 # Kartu KPI Atas (3 Kolom: Total Konsumsi, Daya Saat Ini, Estimasi Biaya)
@@ -252,7 +269,7 @@ with kpi_c2:
     st.markdown(
         f"""
         <div class="kpi-card-velora">
-            <div class="kpi-label">Daya Total Saat Ini</div>
+            <div class="kpi-label">Daya total jam terakhir data</div>
             <div>
                 <span class="kpi-val">{cur_power:.1f}</span>
                 <span class="kpi-unit">kW</span>
@@ -296,14 +313,11 @@ with col_mid_left:
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <div>
                     <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Energy Overview</h3>
-                    <div style="font-size:12px; color:#6B6259; font-weight:600;">Kurva beban daya instan & konsumsi energi seluruh mesin (WIB)</div>
+                    <div style="font-size:12px; color:#6B6259; font-weight:600;">Kurva beban daya instan seluruh mesin per jam (WIB)</div>
                 </div>
                 <div style="display:flex; gap:16px; font-size:12px; font-weight:700;">
                     <span style="display:flex; align-items:center; gap:5px; color:#E8590C;">
-                        <span style="width:12px; height:3px; background:#E8590C; border-radius:2px;"></span> Daya (kW)
-                    </span>
-                    <span style="display:flex; align-items:center; gap:5px; color:#F2C230;">
-                        <span style="width:12px; height:3px; background:#F2C230; border-radius:2px;"></span> Energi (kWh)
+                        <span style="width:12px; height:3px; background:#E8590C; border-radius:2px;"></span> Daya Total (kW)
                     </span>
                 </div>
             </div>
@@ -327,29 +341,17 @@ with col_mid_left:
 
         fig_multi = go.Figure()
 
-        # 1. Seri 1: Daya kW (Oranye Terracotta)
+        # Satu garis daya total per jam (kW)
         fig_multi.add_trace(
             go.Scatter(
                 x=x_vals,
                 y=df_chart["power_kw"],
                 mode="lines",
-                name="Daya (kW)",
+                name="Daya Total (kW)",
                 line=dict(color="#E8590C", width=3, shape="spline"),
                 fill="tozeroy",
                 fillcolor="rgba(232, 89, 12, 0.06)",
-                hovertemplate="<b>Waktu (WIB)</b>: %{x}<br>Daya: <b>%{y:.2f} kW</b><extra></extra>",
-            )
-        )
-
-        # 2. Seri 2: Konsumsi kWh (Kuning Hangat)
-        fig_multi.add_trace(
-            go.Scatter(
-                x=x_vals,
-                y=df_chart["energy_kwh"],
-                mode="lines",
-                name="Energi (kWh)",
-                line=dict(color="#F2C230", width=2.5, shape="spline"),
-                hovertemplate="<b>Waktu (WIB)</b>: %{x}<br>Energi: <b>%{y:.2f} kWh</b><extra></extra>",
+                hovertemplate="<b>Waktu (WIB)</b>: %{x}<br>Daya Total: <b>%{y:.2f} kW</b><extra></extra>",
             )
         )
 
@@ -382,7 +384,7 @@ with col_mid_right:
             value=round(cur_power, 2),
             domain={"x": [0.05, 0.95], "y": [0.15, 0.95]},
             title={
-                "text": "<span style='font-size:12px;color:#6B6259;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'>Daya Total Saat Ini</span>",
+                "text": "<span style='font-size:12px;color:#6B6259;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'>Daya total jam terakhir data</span>",
                 "font": {"size": 13, "family": "Plus Jakarta Sans"},
             },
             number={
@@ -469,42 +471,39 @@ b_c1, b_c2, b_c3 = st.columns([1.05, 1.15, 1.6])
 
 with b_c1:
     mock_badge_html = '<span class="badge-mock">Data contoh</span>' if has_mock_alert else ""
-    st.markdown(
-        f"""
-        <div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <div style="font-weight:700; font-size:14px; color:#1F1A17;">Peringatan Pemborosan {mock_badge_html}</div>
-                <span class="badge-pill-orange">{total_waste_alerts} Kasus</span>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
-        """,
-        unsafe_allow_html=True,
-    )
 
+    # Bangun string HTML tanpa indentasi di awal baris dan tanpa baris kosong
+    # agar tidak dianggap oleh parser Markdown sebagai blok kode (4-space indented code block)
+    rows_parts = []
     if alert_type_counts:
         for atype, count in sorted(alert_type_counts.items(), key=lambda x: -x[1]):
-            # Format nama tipe agar mudah dibaca
             readable_type = atype.replace("_", " ").title()
-            st.markdown(
-                f"""
-                <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
-                    <span style="color:#6B6259;">{readable_type}</span>
-                    <span style="font-weight:700; color:#1F1A17;">{count} Kasus</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
+            rows_parts.append(
+                f'<div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">'
+                f'<span style="color:#6B6259;">{readable_type}</span>'
+                f'<span style="font-weight:700; color:#1F1A17;">{count} Kasus</span>'
+                f'</div>'
             )
     else:
-        st.markdown(
-            """
-            <div style="font-size:13px; color:#6B6259; padding: 12px 0;">
-                Tidak ada pemborosan terdeteksi pada rentang waktu ini.
-            </div>
-            """,
-            unsafe_allow_html=True,
+        rows_parts.append(
+            '<div style="font-size:13px; color:#6B6259; padding: 12px 0;">'
+            'Tidak ada pemborosan terdeteksi pada rentang waktu ini.'
+            '</div>'
         )
 
-    st.markdown("</div></div>", unsafe_allow_html=True)
+    alert_rows_html = "".join(rows_parts)
+    alerts_card_html = "".join([
+        '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%;">',
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">',
+        f'<div style="font-weight:700; font-size:14px; color:#1F1A17;">Peringatan Pemborosan {mock_badge_html}</div>',
+        f'<span class="badge-pill-orange">{total_waste_alerts} Kasus</span>',
+        '</div>',
+        '<div style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">',
+        alert_rows_html,
+        '</div>',
+        '</div>',
+    ])
+    st.markdown(alerts_card_html, unsafe_allow_html=True)
 
 with b_c2:
     st.markdown(
@@ -549,12 +548,14 @@ with b_c3:
         st.info("Data pembacaan sensor belum tersedia.")
     else:
         df_readings["hour_num"] = df_readings["timestamp_wib"].dt.hour
-        machine_ids = [m["machine_id"] for m in machines]
+        # Urutkan baris mesin dari atas ke bawah (M01 di atas)
+        sorted_machines = sorted(machines, key=lambda m: m.get("machine_id", ""))
+        machine_ids = [m["machine_id"] for m in sorted_machines]
         hours_labels = [f"{h:02d}" for h in range(24)]
 
         # Matriks Beban: z[m_idx][h] = rata-rata power_kw / rated_power_kw
         matrix_z: list[list[float]] = []
-        for m in machines:
+        for m in sorted_machines:
             mid = m["machine_id"]
             rated_kw = float(m.get("rated_power_kw", 0)) or 1.0
             df_m = df_readings[df_readings["machine_id"] == mid]
@@ -596,6 +597,7 @@ with b_c3:
             title_font=dict(size=12, color="#6B6259"),
         )
         fig_heatmap.update_yaxes(
+            autorange="reversed",
             tickfont=dict(size=12, color="#6B6259"),
         )
         style_plotly_fig(fig_heatmap, height=195)
