@@ -129,6 +129,12 @@ uvicorn backend.main:app --reload
 streamlit run frontend/app.py
 ```
 
+> **Catatan Frontend (branch `feature/frontend`):**
+> - Frontend membutuhkan backend aktif di `http://localhost:8000`. Pastikan backend sudah berjalan sebelum membuka Streamlit.
+> - Install dependensi frontend terlebih dahulu jika belum: `pip install -r requirements.txt`
+> - **JANGAN jalankan file di folder `pages/` secara langsung** (misalnya `streamlit run frontend/pages/1_Overview.py`). Selalu jalankan via `frontend/app.py`.
+> - Jika ada perubahan data, clear cache Streamlit dengan menu kanan atas → *Clear cache*, atau tekan `Ctrl+F5` di browser.
+
 ## Daftar Endpoint
 
 | Method | Endpoint | Deskripsi |
