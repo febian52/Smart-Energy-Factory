@@ -345,7 +345,34 @@ CUSTOM_CSS = """
         border: 1px solid #EFE5D6 !important;
         border-radius: 18px !important;
         box-shadow: 0 2px 10px -2px rgba(31, 26, 23, 0.04) !important;
-        padding: 6px 4px !important;
+        padding: 16px 18px !important;
+    }
+
+    /* Segmented Control & Pills ala Velora Warm Light */
+    [data-testid="stSegmentedControl"], [data-testid="stPills"] {
+        background: #F3ECE2 !important;
+        padding: 4px !important;
+        border-radius: 24px !important;
+        border: 1px solid #EAE0D0 !important;
+    }
+
+    [data-testid="stSegmentedControl"] button, [data-testid="stPills"] button {
+        border-radius: 20px !important;
+        border: none !important;
+        background: transparent !important;
+        color: #6B6259 !important;
+        font-weight: 600 !important;
+        font-size: 0.84rem !important;
+        padding: 5px 16px !important;
+        transition: all 0.2s ease !important;
+    }
+
+    [data-testid="stSegmentedControl"] button[aria-selected="true"],
+    [data-testid="stPills"] button[aria-selected="true"] {
+        background: #FFFFFF !important;
+        color: #1F1A17 !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+        font-weight: 700 !important;
     }
 
     /* ---- Equal-height bottom-row cards ---- */

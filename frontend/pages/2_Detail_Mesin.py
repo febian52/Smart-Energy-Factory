@@ -94,12 +94,13 @@ with header_c1:
     )
 
 with header_c2:
-    agg_selection = st.radio(
+    st.markdown("<div style='margin-top: 18px;'></div>", unsafe_allow_html=True)
+    agg_selection = st.segmented_control(
         "Agregasi Waktu",
         options=["Per Jam", "Per Hari"],
-        horizontal=True,
+        default="Per Jam",
         label_visibility="collapsed",
-    )
+    ) or "Per Jam"
 
 # ---------------------------------------------------------------------------
 # Panel Filter: Pilih Mesin & Rentang Tanggal (Default 7 Hari Terakhir WIB)
@@ -304,109 +305,107 @@ st.markdown("<div style='margin:1.2rem 0;'></div>", unsafe_allow_html=True)
 # Visualisasi Grafik Time-Series Daya
 # Satu kurva power_kw, tanpa marker, status idle ditandai shading tipis
 # ---------------------------------------------------------------------------
-chart_card_header = "".join([
-    '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:20px 22px; box-shadow:0 2px 10px -2px rgba(31,26,23,0.04); margin-bottom:1.2rem;">',
-    '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">',
-    '<div>',
-    f'<h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Profil Beban Daya - {selected_machine_id}</h3>',
-    f'<div style="font-size:12px; color:#6B6259; font-weight:600;">{current_machine.get("name", "")} · Kapasitas Rated {rated_kw:.0f} kW</div>',
-    '</div>',
-    '<div style="display:flex; gap:16px; font-size:12px; font-weight:600;">',
-    '<span style="display:flex; align-items:center; gap:5px; color:#E8590C;"><span style="width:12px; height:3px; background:#E8590C; border-radius:2px;"></span> Beban Daya (kW)</span>',
-    '<span style="display:flex; align-items:center; gap:5px; color:#C4B5A5;"><span style="width:10px; height:10px; background:rgba(200,190,180,0.35); border-radius:2px;"></span> Kondisi Standby (Idle)</span>',
-    '</div>',
-    '</div>',
-])
-st.markdown(chart_card_header, unsafe_allow_html=True)
+with st.container(border=True):
+    chart_card_header = "".join([
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">',
+        '<div>',
+        f'<h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Profil Beban Daya - {selected_machine_id}</h3>',
+        f'<div style="font-size:12px; color:#6B6259; font-weight:600;">{current_machine.get("name", "")} · Kapasitas Rated {rated_kw:.0f} kW</div>',
+        '</div>',
+        '<div style="display:flex; gap:16px; font-size:12px; font-weight:600;">',
+        '<span style="display:flex; align-items:center; gap:5px; color:#E8590C;"><span style="width:12px; height:3px; background:#E8590C; border-radius:2px;"></span> Beban Daya (kW)</span>',
+        '<span style="display:flex; align-items:center; gap:5px; color:#C4B5A5;"><span style="width:10px; height:10px; background:rgba(200,190,180,0.35); border-radius:2px;"></span> Kondisi Standby (Idle)</span>',
+        '</div>',
+        '</div>',
+    ])
+    st.markdown(chart_card_header, unsafe_allow_html=True)
 
-if agg_selection == "Per Jam":
-    df_raw["hour_wib"] = df_raw["timestamp_wib"].dt.floor("h")
-    # Agregasi per jam: rata-rata kW
-    df_chart = df_raw.groupby("hour_wib", as_index=False).agg({
-        "power_kw": "mean",
-        "energy_kwh": "sum",
-        "status": lambda s: "idle" if (s == "idle").mean() > 0.5 else "running",
-    }).sort_values("hour_wib")
+    if agg_selection == "Per Jam":
+        df_raw["hour_wib"] = df_raw["timestamp_wib"].dt.floor("h")
+        # Agregasi per jam: rata-rata kW
+        df_chart = df_raw.groupby("hour_wib", as_index=False).agg({
+            "power_kw": "mean",
+            "energy_kwh": "sum",
+            "status": lambda s: "idle" if (s == "idle").mean() > 0.5 else "running",
+        }).sort_values("hour_wib")
 
-    fig = go.Figure()
+        fig = go.Figure()
 
-    # Identifikasi periode idle untuk shading background
-    idle_blocks = []
-    current_block = []
-    for _, row in df_chart.iterrows():
-        if row["status"] == "idle":
-            current_block.append(row["hour_wib"])
-        else:
-            if current_block:
-                idle_blocks.append((current_block[0], current_block[-1]))
-                current_block = []
-    if current_block:
-        idle_blocks.append((current_block[0], current_block[-1]))
+        # Identifikasi periode idle untuk shading background
+        idle_blocks = []
+        current_block = []
+        for _, row in df_chart.iterrows():
+            if row["status"] == "idle":
+                current_block.append(row["hour_wib"])
+            else:
+                if current_block:
+                    idle_blocks.append((current_block[0], current_block[-1]))
+                    current_block = []
+        if current_block:
+            idle_blocks.append((current_block[0], current_block[-1]))
 
-    for b_start, b_end in idle_blocks:
-        x1_val = b_end + pd.Timedelta(hours=1) if b_start == b_end else b_end
-        fig.add_shape(
-            type="rect",
-            x0=b_start,
-            x1=x1_val,
-            y0=0,
-            y1=1,
-            yref="paper",
-            fillcolor="rgba(196, 181, 165, 0.20)",
-            layer="below",
-            line_width=0,
+        for b_start, b_end in idle_blocks:
+            x1_val = b_end + pd.Timedelta(hours=1) if b_start == b_end else b_end
+            fig.add_shape(
+                type="rect",
+                x0=b_start,
+                x1=x1_val,
+                y0=0,
+                y1=1,
+                yref="paper",
+                fillcolor="rgba(196, 181, 165, 0.20)",
+                layer="below",
+                line_width=0,
+            )
+
+        # Satu kurva power_kw tanpa marker
+        fig.add_trace(
+            go.Scatter(
+                x=df_chart["hour_wib"],
+                y=df_chart["power_kw"],
+                mode="lines",
+                name="Daya Rata-rata (kW)",
+                line=dict(color="#E8590C", width=2.2, shape="spline"),
+                fill="tozeroy",
+                fillcolor="rgba(232, 89, 12, 0.05)",
+                hovertemplate="<b>%{x|%d %b %Y, %H:00 WIB}</b><br>Daya: <b>%{y:.2f} kW</b><extra></extra>",
+            )
         )
 
-    # Satu kurva power_kw tanpa marker
-    fig.add_trace(
-        go.Scatter(
-            x=df_chart["hour_wib"],
-            y=df_chart["power_kw"],
-            mode="lines",
-            name="Daya Rata-rata (kW)",
-            line=dict(color="#E8590C", width=2.2, shape="spline"),
-            fill="tozeroy",
-            fillcolor="rgba(232, 89, 12, 0.05)",
-            hovertemplate="<b>%{x|%d %b %Y, %H:00 WIB}</b><br>Daya: <b>%{y:.2f} kW</b><extra></extra>",
+        style_plotly_fig(fig, height=330)
+        fig.update_layout(
+            margin=dict(l=20, r=20, t=10, b=30),
+            xaxis=dict(title="", showgrid=True),
+            yaxis=dict(title="Daya Rata-rata (kW)", showgrid=True),
+            hovermode="x unified",
         )
-    )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    style_plotly_fig(fig, height=330)
-    fig.update_layout(
-        margin=dict(l=20, r=20, t=10, b=30),
-        xaxis=dict(title="", showgrid=True),
-        yaxis=dict(title="Daya Rata-rata (kW)", showgrid=True),
-        hovermode="x unified",
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    else:
+        df_raw["date_wib"] = df_raw["timestamp_wib"].dt.date
+        df_daily = df_raw.groupby("date_wib", as_index=False).agg({
+            "energy_kwh": "sum",
+            "power_kw": "mean",
+        }).sort_values("date_wib")
 
-else:
-    df_raw["date_wib"] = df_raw["timestamp_wib"].dt.date
-    df_daily = df_raw.groupby("date_wib", as_index=False).agg({
-        "energy_kwh": "sum",
-        "power_kw": "mean",
-    }).sort_values("date_wib")
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=df_daily["date_wib"],
-            y=df_daily["energy_kwh"],
-            name="Total Energi (kWh)",
-            marker=dict(color="#E8590C", cornerradius=6),
-            hovertemplate="<b>%{x|%d %b %Y}</b><br>Energi: <b>%{y:,.1f} kWh</b><extra></extra>",
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=df_daily["date_wib"],
+                y=df_daily["energy_kwh"],
+                name="Total Energi (kWh)",
+                marker=dict(color="#E8590C", cornerradius=6),
+                hovertemplate="<b>%{x|%d %b %Y}</b><br>Energi: <b>%{y:,.1f} kWh</b><extra></extra>",
+            )
         )
-    )
 
-    style_plotly_fig(fig, height=330)
-    fig.update_layout(
-        margin=dict(l=20, r=20, t=10, b=30),
-        xaxis=dict(title="", showgrid=False),
-        yaxis=dict(title="Energi Harian (kWh)", showgrid=True),
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-st.markdown("</div>", unsafe_allow_html=True)
+        style_plotly_fig(fig, height=330)
+        fig.update_layout(
+            margin=dict(l=20, r=20, t=10, b=30),
+            xaxis=dict(title="", showgrid=False),
+            yaxis=dict(title="Energi Harian (kWh)", showgrid=True),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 # ---------------------------------------------------------------------------

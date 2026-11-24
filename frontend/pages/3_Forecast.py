@@ -109,11 +109,13 @@ with ctrl_c1:
     rated_kw = float(selected_machine.get("rated_power_kw", 0.0))
 
 with ctrl_c2:
-    horizon_label = st.radio(
+    st.markdown("<div style='margin-top: 26px;'></div>", unsafe_allow_html=True)
+    horizon_label = st.segmented_control(
         "Horizon Prediksi",
         options=["24 Jam", "7 Hari (168 Jam)"],
-        horizontal=True,
-    )
+        default="24 Jam",
+        label_visibility="collapsed",
+    ) or "24 Jam"
     selected_hours = 24 if horizon_label == "24 Jam" else 168
 
 # Header Halaman Bersih & Dinamis
@@ -357,33 +359,31 @@ fig.update_yaxes(
 )
 
 # Tampilkan Kontainer Kartu Grafik
-chart_card_header = "".join([
-    '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:20px 22px; box-shadow:0 2px 10px -2px rgba(31,26,23,0.04);">',
-    '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
-    '<div>',
-    f'<h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Proyeksi Beban Konsumsi: {selected_machine_id}</h3>',
-    f'<div style="font-size:12px; color:#6B6259; font-weight:600;">Kurva komparasi data riil 72 jam terakhir terhadap proyeksi model ML {selected_hours} jam ke depan (WIB)</div>',
-    '</div>',
-    '</div>',
-])
-st.markdown(chart_card_header, unsafe_allow_html=True)
-st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-# 6. Pengecekan apakah angka prediksi per jam melebihi rated_power_kw mesin
-# Jangan menyesuaikan atau memotong angka prediksi, hanya tampilkan peringatan
-exceeded_mask = df_preds["predicted_kwh"] > rated_kw
-exceeded_count = int(exceeded_mask.sum())
-if rated_kw > 0 and exceeded_count > 0:
-    max_pred_val = float(df_preds["predicted_kwh"].max())
-    warning_capacity_html = "".join([
-        '<div style="font-size:12px; color:#E8590C; font-weight:600; padding:8px 12px; background:rgba(232,89,12,0.06); border-radius:8px; border:1px solid rgba(232,89,12,0.2); margin-top:8px; display:flex; align-items:center; gap:8px;">',
-        '<span>⚠️</span>',
-        f'<span><b>Prediksi melebihi kapasitas mesin:</b> Terdeteksi {exceeded_count} jam proyeksi dengan beban di atas rated power ({rated_kw:.1f} kW), nilai tertinggi mencapai {max_pred_val:.2f} kWh.</span>',
+with st.container(border=True):
+    chart_card_header = "".join([
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
+        '<div>',
+        f'<h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Proyeksi Beban Konsumsi: {selected_machine_id}</h3>',
+        f'<div style="font-size:12px; color:#6B6259; font-weight:600;">Kurva komparasi data riil 72 jam terakhir terhadap proyeksi model ML {selected_hours} jam ke depan (WIB)</div>',
+        '</div>',
         '</div>',
     ])
-    st.markdown(warning_capacity_html, unsafe_allow_html=True)
+    st.markdown(chart_card_header, unsafe_allow_html=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-st.markdown("</div>", unsafe_allow_html=True)
+    # 6. Pengecekan apakah angka prediksi per jam melebihi rated_power_kw mesin
+    # Jangan menyesuaikan atau memotong angka prediksi, hanya tampilkan peringatan
+    exceeded_mask = df_preds["predicted_kwh"] > rated_kw
+    exceeded_count = int(exceeded_mask.sum())
+    if rated_kw > 0 and exceeded_count > 0:
+        max_pred_val = float(df_preds["predicted_kwh"].max())
+        warning_capacity_html = "".join([
+            '<div style="font-size:12px; color:#E8590C; font-weight:600; padding:8px 12px; background:rgba(232,89,12,0.06); border-radius:8px; border:1px solid rgba(232,89,12,0.2); margin-top:8px; display:flex; align-items:center; gap:8px;">',
+            '<span>⚠️</span>',
+            f'<span><b>Prediksi melebihi kapasitas mesin:</b> Terdeteksi {exceeded_count} jam proyeksi dengan beban di atas rated power ({rated_kw:.1f} kW), nilai tertinggi mencapai {max_pred_val:.2f} kWh.</span>',
+            '</div>',
+        ])
+        st.markdown(warning_capacity_html, unsafe_allow_html=True)
 
 # Footer Info
 st.markdown(

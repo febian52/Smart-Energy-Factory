@@ -405,93 +405,91 @@ vis_c1, vis_c2 = st.columns([1.1, 1.5])
 
 # --- Bar chart: Alert per Mesin ---
 with vis_c1:
-    st.markdown(
-        "".join([
-            '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">',
-            '<div style="font-weight:800; font-size:1rem; color:#1F1A17; margin-bottom:4px;">Alert per Mesin</div>',
-            '<div style="font-size:0.75rem; color:#6B6259; margin-bottom:10px;">Jumlah kasus anomali per ID mesin</div>',
-        ]),
-        unsafe_allow_html=True,
-    )
-
-    mach_counts = df_alerts.groupby("machine_id").size().reset_index(name="count").sort_values("count", ascending=True)
-
-    fig_bar = go.Figure(
-        go.Bar(
-            x=mach_counts["count"],
-            y=mach_counts["machine_id"],
-            orientation="h",
-            marker=dict(
-                color=mach_counts["count"],
-                colorscale=[[0.0, "#FCD34D"], [1.0, "#E8590C"]],
-                showscale=False,
-                cornerradius=6,
-            ),
-            text=mach_counts["count"],
-            textposition="outside",
-            textfont=dict(size=11, color="#1F1A17", family="Plus Jakarta Sans"),
-            hovertemplate="<b>Mesin %{y}</b><br>Total Alert: %{x:,} kasus<extra></extra>",
+    with st.container(border=True):
+        st.markdown(
+            "".join([
+                '<div style="font-weight:800; font-size:1rem; color:#1F1A17; margin-bottom:4px;">Alert per Mesin</div>',
+                '<div style="font-size:0.75rem; color:#6B6259; margin-bottom:10px;">Jumlah kasus anomali per ID mesin</div>',
+            ]),
+            unsafe_allow_html=True,
         )
-    )
-    style_plotly_fig(fig_bar, height=270)
-    fig_bar.update_layout(
-        margin=dict(l=10, r=35, t=10, b=10),
-        xaxis=dict(title="Jumlah Kasus", showgrid=True, zeroline=False),
-        yaxis=dict(title="", tickfont=dict(size=11, color="#1F1A17"), dtick=1),
-    )
-    st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
+
+        mach_counts = df_alerts.groupby("machine_id").size().reset_index(name="count").sort_values("count", ascending=True)
+
+        fig_bar = go.Figure(
+            go.Bar(
+                x=mach_counts["count"],
+                y=mach_counts["machine_id"],
+                orientation="h",
+                marker=dict(
+                    color=mach_counts["count"],
+                    colorscale=[[0.0, "#FCD34D"], [1.0, "#E8590C"]],
+                    showscale=False,
+                    cornerradius=6,
+                ),
+                text=mach_counts["count"],
+                textposition="outside",
+                textfont=dict(size=11, color="#1F1A17", family="Plus Jakarta Sans"),
+                hovertemplate="<b>Mesin %{y}</b><br>Total Alert: %{x:,} kasus<extra></extra>",
+            )
+        )
+        style_plotly_fig(fig_bar, height=270)
+        fig_bar.update_layout(
+            margin=dict(l=10, r=35, t=10, b=10),
+            xaxis=dict(title="Jumlah Kasus", showgrid=True, zeroline=False),
+            yaxis=dict(title="", tickfont=dict(size=11, color="#1F1A17"), dtick=1),
+        )
+        st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
 
 # --- Bubble Chart: Jam WIB vs Jumlah Alert ---
 with vis_c2:
-    st.markdown(
-        "".join([
-            '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">',
-            '<div style="font-weight:800; font-size:1rem; color:#1F1A17; margin-bottom:4px;">Distribusi Jam Kejadian (WIB)</div>',
-            '<div style="font-size:0.75rem; color:#6B6259; margin-bottom:10px;">Jam operasional terjadinya anomali (ukuran bubble = rata-rata keparahan)</div>',
-        ]),
-        unsafe_allow_html=True,
-    )
-
-    hourly_grp = (
-        df_alerts.groupby("hour_wib")
-        .agg(count=("severity_num", "count"), avg_sev=("severity_num", "mean"))
-        .reset_index()
-    )
-
-    all_hours = pd.DataFrame({"hour_wib": list(range(24))})
-    hourly_grp = all_hours.merge(hourly_grp, on="hour_wib", how="left").fillna({"count": 0, "avg_sev": 1})
-
-    fig_bubble = go.Figure(
-        go.Scatter(
-            x=hourly_grp["hour_wib"],
-            y=hourly_grp["count"],
-            mode="markers+lines",
-            line=dict(color="rgba(232, 89, 12, 0.3)", width=1.5, dash="dot"),
-            marker=dict(
-                size=hourly_grp["count"].apply(lambda c: max(8, min(36, 8 + c * 0.4))),
-                color=hourly_grp["avg_sev"],
-                colorscale=[[0.0, "#16A34A"], [0.5, "#F2C230"], [1.0, "#E8590C"]],
-                showscale=False,
-                line=dict(color="#FFFFFF", width=1.5),
-            ),
-            hovertemplate="<b>Jam %{x:02d}:00 WIB</b><br>Jumlah Alert: %{y:,}<br>Avg Severity: %{marker.color:.1f}/3<extra></extra>",
+    with st.container(border=True):
+        st.markdown(
+            "".join([
+                '<div style="font-weight:800; font-size:1rem; color:#1F1A17; margin-bottom:4px;">Distribusi Jam Kejadian (WIB)</div>',
+                '<div style="font-size:0.75rem; color:#6B6259; margin-bottom:10px;">Jam operasional terjadinya anomali (ukuran bubble = rata-rata keparahan)</div>',
+            ]),
+            unsafe_allow_html=True,
         )
-    )
-    style_plotly_fig(fig_bubble, height=270)
-    fig_bubble.update_layout(
-        margin=dict(l=10, r=10, t=10, b=25),
-        xaxis=dict(
-            title="Jam WIB (00–23)",
-            tickmode="linear",
-            tick0=0,
-            dtick=2,
-            tickfont=dict(size=11),
-        ),
-        yaxis=dict(title="Jumlah Kasus", showgrid=True),
-    )
-    st.plotly_chart(fig_bubble, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
+
+        hourly_grp = (
+            df_alerts.groupby("hour_wib")
+            .agg(count=("severity_num", "count"), avg_sev=("severity_num", "mean"))
+            .reset_index()
+        )
+
+        all_hours = pd.DataFrame({"hour_wib": list(range(24))})
+        hourly_grp = all_hours.merge(hourly_grp, on="hour_wib", how="left").fillna({"count": 0, "avg_sev": 1})
+
+        fig_bubble = go.Figure(
+            go.Scatter(
+                x=hourly_grp["hour_wib"],
+                y=hourly_grp["count"],
+                mode="markers+lines",
+                line=dict(color="rgba(232, 89, 12, 0.3)", width=1.5, dash="dot"),
+                marker=dict(
+                    size=hourly_grp["count"].apply(lambda c: max(8, min(36, 8 + c * 0.4))),
+                    color=hourly_grp["avg_sev"],
+                    colorscale=[[0.0, "#16A34A"], [0.5, "#F2C230"], [1.0, "#E8590C"]],
+                    showscale=False,
+                    line=dict(color="#FFFFFF", width=1.5),
+                ),
+                hovertemplate="<b>Jam %{x:02d}:00 WIB</b><br>Jumlah Alert: %{y:,}<br>Avg Severity: %{marker.color:.1f}/3<extra></extra>",
+            )
+        )
+        style_plotly_fig(fig_bubble, height=270)
+        fig_bubble.update_layout(
+            margin=dict(l=10, r=10, t=10, b=25),
+            xaxis=dict(
+                title="Jam WIB (00–23)",
+                tickmode="linear",
+                tick0=0,
+                dtick=2,
+                tickfont=dict(size=11),
+            ),
+            yaxis=dict(title="Jumlah Kasus", showgrid=True),
+        )
+        st.plotly_chart(fig_bubble, use_container_width=True, config={"displayModeBar": False})
 
 st.markdown("<div style='margin:1.4rem 0;'></div>", unsafe_allow_html=True)
 
