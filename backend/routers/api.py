@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Query
 from database.db import get_db
@@ -101,4 +101,18 @@ def waste_alerts(
 ):
     if detect_waste is None:
         raise HTTPException(503, "Model deteksi pemborosan belum tersedia")
-    return detect_waste(machine_id, start, end)
+
+    db = get_db()
+    last = db.energy_readings.find_one(
+        {"machine_id": machine_id}, sort=[("timestamp", -1)]
+    )
+    if last is None:
+        raise HTTPException(404, f"machine_id {machine_id} tidak ditemukan")
+
+    end = end or last["timestamp"]
+    start = start or (end - timedelta(days=7))
+
+    try:
+        return detect_waste(machine_id, start, end)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
