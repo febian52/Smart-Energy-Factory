@@ -99,6 +99,7 @@ with header_c2:
         "Agregasi Waktu",
         options=["Per Jam", "Per Hari"],
         default="Per Jam",
+        selection_mode="single",
         label_visibility="collapsed",
     ) or "Per Jam"
 

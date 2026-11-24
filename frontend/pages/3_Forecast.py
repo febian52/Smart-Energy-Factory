@@ -19,6 +19,7 @@ try:
         get_forecast,
         get_energy,
         get_data_range,
+        TARIF_PER_KWH,
     )
     from frontend.ui import (
         apply_theme,
@@ -31,6 +32,7 @@ except ImportError:
         get_forecast,
         get_energy,
         get_data_range,
+        TARIF_PER_KWH,
     )
     from ui import (
         apply_theme,
@@ -114,6 +116,7 @@ with ctrl_c2:
         "Horizon Prediksi",
         options=["24 Jam", "7 Hari (168 Jam)"],
         default="24 Jam",
+        selection_mode="single",
         label_visibility="collapsed",
     ) or "24 Jam"
     selected_hours = 24 if horizon_label == "24 Jam" else 168
@@ -136,7 +139,7 @@ st.markdown(header_title_html, unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 try:
     with st.spinner(f"Memuat prediksi untuk {selected_machine_id} ({selected_hours} jam)..."):
-        forecast_res = get_forecast(selected_machine_id, hours=selected_hours)
+        forecast_res = get_forecast(selected_machine_id, hours=selected_hours, timeout=45)
 except RuntimeError as exc:
     st.error(
         f"🚨 **Gagal memuat prediksi dari API Backend:**\n\n`{exc}`",
@@ -191,6 +194,18 @@ else:
 
 # Pemrosesan Data Prediksi
 df_preds = pd.DataFrame(predictions)
+
+# Poin 7: Validasi field — jika format respons /forecast berubah, tampilkan error jelas
+_required_cols = {"forecast_time", "predicted_kwh"}
+if not _required_cols.issubset(df_preds.columns):
+    _missing = _required_cols - set(df_preds.columns)
+    st.error(
+        f"🚨 **Format respons /forecast berubah — field hilang: `{_missing}`.**\n\n"
+        "Hubungi tim backend (Didi) untuk memastikan kolom `forecast_time` dan `predicted_kwh` tersedia.",
+        icon="🚫",
+    )
+    st.stop()
+
 df_preds["forecast_time"] = pd.to_datetime(df_preds["forecast_time"])
 if df_preds["forecast_time"].dt.tz is None:
     df_preds["forecast_time"] = df_preds["forecast_time"].dt.tz_localize("UTC")
@@ -203,7 +218,7 @@ df_preds = df_preds.sort_values("hour_wib")
 # 5. Tiga Kartu Ringkas (KPI)
 # ---------------------------------------------------------------------------
 total_pred_kwh = float(df_preds["predicted_kwh"].sum())
-cost_pred = total_pred_kwh * 1500  # Tarif Rp 1.500/kWh
+cost_pred = total_pred_kwh * TARIF_PER_KWH  # Tarif Rp/kWh dari api_client
 
 if not df_preds.empty:
     peak_idx = df_preds["predicted_kwh"].idxmax()
@@ -255,7 +270,7 @@ with kpi_c3:
         f'<span class="kpi-val">{format_id_currency(cost_pred)}</span>',
         '</div>',
         '<div class="kpi-sub" style="margin-top:4px;">',
-        '<span class="badge-pill-orange">⚡ Tarif Rp 1.500</span> ',
+        f'<span class="badge-pill-orange">⚡ Tarif Rp {TARIF_PER_KWH:,}</span> ',
         '<span style="color:#6B6259; font-weight:500; font-size:12px;">per kWh</span>',
         '</div>',
         '</div>',

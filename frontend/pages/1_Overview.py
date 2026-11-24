@@ -2,9 +2,9 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -21,6 +21,7 @@ try:
         get_waste_alerts,
         get_energy,
         get_data_range,
+        TARIF_PER_KWH,
     )
     from frontend.ui import (
         apply_theme,
@@ -33,6 +34,7 @@ except ImportError:
         get_waste_alerts,
         get_energy,
         get_data_range,
+        TARIF_PER_KWH,
     )
     from ui import (
         apply_theme,
@@ -71,7 +73,7 @@ def format_id_currency(val: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Fungsi Cache untuk Mengambil Data 7 Hari Terakhir
+# Fungsi Cache untuk Mengambil Data 7 Hari Terakhir (paralel per mesin)
 # ---------------------------------------------------------------------------
 @st.cache_data(ttl=600, show_spinner=False)
 def load_overview_data(start_utc_iso: str, end_utc_iso: str):
@@ -81,30 +83,51 @@ def load_overview_data(start_utc_iso: str, end_utc_iso: str):
     machines = get_machines()
     total_rated_kw = sum(float(m.get("rated_power_kw", 0)) for m in machines) if machines else 466.0
 
+    # ---- Poin 4: Parallelisasi fetch data per mesin ----
     all_readings: list[dict] = []
     data_is_truncated = False
+    failed_machines: list[str] = []
 
-    for m in machines:
+    def _fetch_energy(m: dict) -> tuple[str, list[dict]]:
         mid = m["machine_id"]
-        rows = get_energy(mid, start=s_utc, end=e_utc, limit=10000)
-        if len(rows) >= 10000:
-            data_is_truncated = True
-        all_readings.extend(rows)
+        rows = get_energy(mid, start=s_utc, end=e_utc, limit=10000, timeout=30)
+        return mid, rows
 
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs = {ex.submit(_fetch_energy, m): m for m in machines}
+        for fut in as_completed(futs):
+            m = futs[fut]
+            try:
+                mid, rows = fut.result()
+                if len(rows) >= 10000:
+                    data_is_truncated = True
+                all_readings.extend(rows)
+            except Exception as exc:
+                failed_machines.append(m["machine_id"])
+
+    # ---- Parallelisasi fetch waste_alerts per mesin ----
     all_alerts: list[dict] = []
     has_mock_alert = False
-    for m in machines:
-        mid = m["machine_id"]
-        try:
-            res = get_waste_alerts(mid, start=s_utc, end=e_utc, timeout=45)
-            alerts = res.get("alerts", [])
-            all_alerts.extend(alerts)
-            if res.get("is_mock"):
-                has_mock_alert = True
-        except Exception:
-            pass
 
-    return machines, all_readings, all_alerts, has_mock_alert, total_rated_kw, data_is_truncated
+    def _fetch_alerts(m: dict) -> tuple[list[dict], bool]:
+        mid = m["machine_id"]
+        res = get_waste_alerts(mid, start=s_utc, end=e_utc, timeout=45)
+        alerts = res.get("alerts", [])
+        is_mock = bool(res.get("is_mock"))
+        return alerts, is_mock
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs_a = {ex.submit(_fetch_alerts, m): m for m in machines}
+        for fut in as_completed(futs_a):
+            try:
+                alerts, is_mock = fut.result()
+                all_alerts.extend(alerts)
+                if is_mock:
+                    has_mock_alert = True
+            except Exception:
+                pass
+
+    return machines, all_readings, all_alerts, has_mock_alert, total_rated_kw, data_is_truncated, failed_machines
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +159,11 @@ try:
             has_mock_alert,
             total_rated_kw,
             data_is_truncated,
+            failed_machines,
         ) = load_overview_data(query_start_utc.isoformat(), query_end_utc.isoformat())
+
+        if failed_machines:
+            st.warning(f"⚠️ Gagal mengambil data dari mesin: {', '.join(failed_machines)}. Data yang ditampilkan mungkin tidak lengkap.")
 
         total_waste_alerts = len(all_alerts)
         alert_type_counts: dict[str, int] = {}
@@ -186,7 +213,7 @@ if all_readings:
 
     # Total Konsumsi Energi & Estimasi Biaya untuk rentang yang sedang tampil
     total_kwh = float(df_readings["energy_kwh"].sum())
-    cost_rp = total_kwh * 1500
+    cost_rp = total_kwh * TARIF_PER_KWH
 
     # 1. Rata-rata power_kw per (mesin, jam_wib)
     mach_hourly_kw = (
@@ -293,6 +320,7 @@ with header_col2:
         "Tampilan",
         options=["Hourly", "Daily"],
         default="Hourly",
+        selection_mode="single",
         label_visibility="collapsed",
     ) or "Hourly"
 
@@ -345,7 +373,7 @@ with kpi_c3:
                 <span class="kpi-val">{format_id_currency(cost_rp)}</span>
             </div>
             <div class="kpi-sub">
-                <span class="badge-pill-orange">⚡ Tarif Rp 1.500</span>
+                <span class="badge-pill-orange">⚡ Tarif Rp {TARIF_PER_KWH:,}</span>
                 <span style="color:#6B6259; font-weight:500; font-size:12px;">per kWh</span>
             </div>
         </div>

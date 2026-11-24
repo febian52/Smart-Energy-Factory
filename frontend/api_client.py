@@ -388,7 +388,7 @@ def get_summary() -> dict:
 
 
 @_cache
-def get_forecast(machine_id: str, hours: int = 24) -> dict:
+def get_forecast(machine_id: str, hours: int = 24, timeout: Optional[int] = None) -> dict:
     """
     GET /forecast/{machine_id}?hours_ahead={hours}
     Kembalikan dict berisi:
@@ -401,7 +401,7 @@ def get_forecast(machine_id: str, hours: int = 24) -> dict:
     if USE_MOCK:
         return _mock_forecast(machine_id, hours)
     try:
-        raw = _get(f"/forecast/{machine_id}", params={"hours_ahead": hours})
+        raw = _get(f"/forecast/{machine_id}", params={"hours_ahead": hours}, timeout=timeout)
         return _normalize_forecast(raw, machine_id, hours)
     except RuntimeError as exc:
         status = getattr(exc, "status_code", None)
