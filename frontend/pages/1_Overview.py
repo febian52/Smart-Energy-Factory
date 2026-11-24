@@ -275,7 +275,7 @@ with kpi_c2:
                 <span class="kpi-unit">kW</span>
             </div>
             <div class="kpi-sub">
-                <span style="color:#6B6259; font-weight:600; font-size:12px;">Rata-rata Deret: <b>{avg_power:.1f} kW</b></span>
+                <span style="color:#6B6259; font-weight:600; font-size:12px;">Rata-rata periode: <b>{avg_power:.1f} kW</b></span>
             </div>
         </div>
         """,
@@ -366,12 +366,20 @@ with col_mid_left:
     st.markdown("</div>", unsafe_allow_html=True)
 
 with col_mid_right:
+    # Caption timestamp jam terakhir data untuk gauge
+    if not hourly_total.empty:
+        last_hour_str = hourly_total["hour_wib"].iloc[-1].strftime("%d %b %Y, %H:00 WIB")
+    else:
+        last_hour_str = "—"
     st.markdown(
         f"""
         <div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:20px 22px; box-shadow:0 2px 10px -2px rgba(31,26,23,0.04); height:100%;">
             <div style="font-weight:800; font-size:1.15rem; color:#1F1A17; margin-bottom:4px;">Power Meter</div>
-            <div style="font-size:12px; color:#6B6259; font-weight:600; margin-bottom:6px;">
+            <div style="font-size:12px; color:#6B6259; font-weight:600; margin-bottom:2px;">
                 Total Daya Semua Mesin (Kapasitas: {total_rated_kw:.0f} kW)
+            </div>
+            <div style="font-size:11px; color:#8C827A; margin-bottom:6px;">
+                Jam terakhir data: {last_hour_str}
             </div>
         """,
         unsafe_allow_html=True,
@@ -576,6 +584,8 @@ with b_c3:
                 z=matrix_z,
                 x=hours_labels,
                 y=machine_ids,
+                xgap=3,
+                ygap=3,
                 colorscale=[
                     [0.0, "#FFF9DB"],
                     [0.5, "#FCD34D"],

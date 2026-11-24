@@ -307,6 +307,43 @@ CUSTOM_CSS = """
         align-items: center;
         gap: 6px;
     }
+
+    /* ---- Chart Card: st.container(border=True) ---- */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: #FFFFFF !important;
+        border: 1px solid #EFE5D6 !important;
+        border-radius: 18px !important;
+        box-shadow: 0 2px 10px -2px rgba(31, 26, 23, 0.04) !important;
+        padding: 6px 4px !important;
+    }
+
+    /* ---- Equal-height bottom-row cards ---- */
+    .equal-height-card {
+        min-height: 260px;
+    }
+
+    /* ---- Date Input Warm Style ---- */
+    [data-testid="stDateInput"] input {
+        border: 1px solid #EFE5D6 !important;
+        border-radius: 10px !important;
+        font-size: 13px !important;
+    }
+
+    /* ---- Download Button Secondary Style ---- */
+    [data-testid="stDownloadButton"] > button {
+        background: #FFFFFF !important;
+        color: #E8590C !important;
+        border: 1px solid #E8590C !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        box-shadow: none !important;
+    }
+
+    [data-testid="stDownloadButton"] > button:hover {
+        background: rgba(232, 89, 12, 0.06) !important;
+        box-shadow: 0 4px 12px rgba(232, 89, 12, 0.12) !important;
+        transform: translateY(-1px);
+    }
 </style>
 """
 
