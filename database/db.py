@@ -325,6 +325,47 @@ def summary(tariff_per_kwh: float = 1500.0, start: TimeLike = None, end: TimeLik
     }
 
 
+def pipeline_kwh_per_shift(start: TimeLike = None, end: TimeLike = None,
+                           machine_id: Optional[str] = None):
+    flt = _time_filter(start, end)
+    if machine_id:
+        flt["machine_id"] = machine_id
+    pipeline = _match_stage(flt) + [
+        # Shift dimulai 07:00 WIB = 00:00 UTC, jadi tanggal shift = tanggal UTC
+        # dan nomor shift = jam UTC // 8 + 1.
+        {"$group": {
+            "_id": {"machine_id": "$machine_id",
+                    "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$timestamp"}},
+                    "shift": {"$add": [{"$floor": {"$divide": [{"$hour": "$timestamp"}, 8]}}, 1]}},
+            "total_kwh": {"$sum": "$energy_kwh"}}},
+        {"$lookup": {
+            "from": "production_logs",
+            "let": {"m": "$_id.machine_id", "d": "$_id.date", "s": "$_id.shift"},
+            "pipeline": [{"$match": {"$expr": {"$and": [
+                {"$eq": ["$machine_id", "$$m"]}, {"$eq": ["$date", "$$d"]},
+                {"$eq": ["$shift", "$$s"]}]}}},
+                {"$project": {"_id": 0, "units_produced": 1}}],
+            "as": "p"}},
+        {"$project": {"_id": 0, "machine_id": "$_id.machine_id", "date": "$_id.date",
+                      "shift": {"$toInt": "$_id.shift"},
+                      "total_kwh": {"$round": ["$total_kwh", 3]},
+                      "units_produced": {"$ifNull": [{"$first": "$p.units_produced"}, 0]}}},
+        {"$sort": {"date": 1, "machine_id": 1, "shift": 1}},
+    ]
+    return "energy_readings", pipeline
+
+
+def kwh_per_shift(start: TimeLike = None, end: TimeLike = None,
+                  machine_id: Optional[str] = None, db: Optional[Database] = None) -> List[dict]:
+    """
+    Total kWh per mesin per tanggal-shift (shift WIB: 1=07-15, 2=15-23, 3=23-07),
+    plus units_produced dari production_logs.
+    Contoh: {"machine_id":"M01","date":"2026-01-05","shift":1,"total_kwh":210.4,"units_produced":91}
+    Untuk total per shift seluruh pabrik, jumlahkan per (date, shift) di Python.
+    """
+    return _run(db, *pipeline_kwh_per_shift(start, end, machine_id))
+
+
 if __name__ == "__main__":
     ping()
     d = get_db()
