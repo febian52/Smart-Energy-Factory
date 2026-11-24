@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 import io
 
 import pandas as pd
@@ -28,6 +29,8 @@ st.set_page_config(
 
 apply_theme()
 
+WIB_TZ = ZoneInfo("Asia/Jakarta")
+UTC_TZ = ZoneInfo("UTC")
 
 # ---------------------------------------------------------------------------
 # Helper: Badge severity → HTML pill
@@ -59,34 +62,47 @@ except Exception as exc:
 
 
 # ---------------------------------------------------------------------------
-# Header Halaman (judul kiri, filter kanan)
+# Header Halaman
 # ---------------------------------------------------------------------------
-hdr_c1, hdr_c2 = st.columns([2.0, 1.4])
-
-with hdr_c1:
-    st.markdown(
-        "".join([
-            '<div style="margin-bottom:12px;">',
-            '<h1 style="color:#1F1A17; font-size:2.2rem; font-weight:800; margin:0 0 4px 0; letter-spacing:-0.03em;">',
-            'Waste Alerts',
-            '</h1>',
-            '<div style="font-size:0.78rem; font-weight:700; color:#6B6259; text-transform:uppercase; letter-spacing:0.08em;">',
-            '// DETEKSI ANOMALI OPERASIONAL · PEMBOROSAN &amp; OVERCONSUMPTION (WIB)',
-            '</div>',
-            '</div>',
-        ]),
-        unsafe_allow_html=True,
-    )
+st.markdown(
+    """
+    <div style="margin-bottom: 20px;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #E8590C; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px;">
+            // ANOMALY & WASTE DETECTION SYSTEM
+        </div>
+        <h1 style="color: #1F1A17; font-size: 2.2rem; font-weight: 800; margin: 0 0 6px 0; letter-spacing: -0.03em;">
+            Peringatan Pemborosan Energi (Waste Alerts)
+        </h1>
+        <p style="color: #6B6259; font-size: 0.95rem; margin: 0; max-width: 850px; line-height: 1.5;">
+            Deteksi otomatis pemborosan konsumsi daya listrik berdasarkan model anomali operasional:
+            kondisi tanpa beban (Idle Waste), beban berlebih di atas rated power, dan anomali pola shift kerja.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ---------------------------------------------------------------------------
-# 2. Filter: Mesin, Severity, Rentang Tanggal
+# 2. Filter: Mesin, Severity, Rentang Tanggal (WIB)
 # ---------------------------------------------------------------------------
 try:
-    s_dt, e_dt = get_data_range()
+    s_dt_raw, e_dt_raw = get_data_range()
+    # Konversi data range ke WIB
+    if s_dt_raw.tzinfo is None:
+        s_dt_wib = s_dt_raw.replace(tzinfo=UTC_TZ).astimezone(WIB_TZ)
+    else:
+        s_dt_wib = s_dt_raw.astimezone(WIB_TZ)
+    if e_dt_raw.tzinfo is None:
+        e_dt_wib = e_dt_raw.replace(tzinfo=UTC_TZ).astimezone(WIB_TZ)
+    else:
+        e_dt_wib = e_dt_raw.astimezone(WIB_TZ)
+
+    default_start_date = s_dt_wib.date()
+    default_end_date = e_dt_wib.date()
 except Exception:
-    s_dt = datetime(2026, 11, 1)
-    e_dt = datetime(2026, 11, 3, 23, 0)
+    default_start_date = datetime(2026, 11, 1).date()
+    default_end_date = datetime(2026, 11, 4).date()
 
 f_c1, f_c2, f_c3 = st.columns([1.4, 1.1, 1.8])
 
@@ -108,62 +124,91 @@ with f_c2:
 with f_c3:
     date_range = st.date_input(
         "Rentang Tanggal (WIB)",
-        value=(s_dt.date(), e_dt.date()),
+        value=(default_start_date, default_end_date),
         min_value=datetime(2020, 1, 1).date(),
         max_value=datetime(2035, 12, 31).date(),
     )
 
 if not isinstance(date_range, (list, tuple)) or len(date_range) != 2:
-    st.info("ℹ️ Silakan tentukan tanggal awal dan tanggal akhir.")
+    st.info("ℹ️ Silakan tentukan tanggal awal dan tanggal akhir pada filter rentang tanggal.")
     st.stop()
 
-filter_start = datetime.combine(date_range[0], time.min)
-filter_end   = datetime.combine(date_range[1], time.max.replace(microsecond=0))
+sel_d_start, sel_d_end = date_range[0], date_range[1]
+
+# Konversi rentang tanggal WIB ke rentang UTC untuk pemanggilan backend API
+wib_start = datetime.combine(sel_d_start, time.min, tzinfo=WIB_TZ)
+wib_end   = datetime.combine(sel_d_end, time.max.replace(microsecond=0), tzinfo=WIB_TZ)
+utc_start = wib_start.astimezone(UTC_TZ).replace(tzinfo=None)
+utc_end   = wib_end.astimezone(UTC_TZ).replace(tzinfo=None)
+
 
 # ---------------------------------------------------------------------------
-# 3. Ambil Data Alert dari API
+# 3. Ambil Data Alert dari API (dengan Cache & Timeout 45s per Request)
 # ---------------------------------------------------------------------------
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_waste_alerts_cached(mid: str, s_iso: str, e_iso: str) -> dict:
+    s = datetime.fromisoformat(s_iso) if s_iso else None
+    e = datetime.fromisoformat(e_iso) if e_iso else None
+    return get_waste_alerts(mid, start=s, end=e, timeout=45)
+
+
 target_machines = [m["machine_id"] for m in machines] if sel_machine == "Semua Mesin" else [sel_machine]
 
 all_alerts: list[dict] = []
 is_mock_flag = False
-load_errors: list[str] = []
+failed_machines: list[str] = []
+success_machines: list[str] = []
 
-with st.spinner("Memuat data waste alerts..."):
+with st.spinner("Memuat data peringatan pemborosan (waste alerts)..."):
     for mid in target_machines:
         try:
-            res = get_waste_alerts(mid, start=filter_start, end=filter_end)
+            res = fetch_waste_alerts_cached(mid, utc_start.isoformat(), utc_end.isoformat())
             alerts = res.get("alerts", [])
             all_alerts.extend(alerts)
+            success_machines.append(mid)
             if res.get("is_mock"):
                 is_mock_flag = True
         except RuntimeError as exc:
-            load_errors.append(f"{mid}: {exc}")
+            failed_machines.append(f"{mid} ({exc})")
         except Exception as exc:
-            load_errors.append(f"{mid}: {exc}")
+            failed_machines.append(f"{mid} ({exc})")
 
-for err in load_errors:
-    st.warning(f"⚠️ Gagal memuat alert: {err}")
+# Tampilkan SATU banner gabungan jika ada sebagian mesin yang gagal
+if failed_machines:
+    st.warning(
+        f"⚠️ **Sebagian data pemborosan gagal dimuat:** {', '.join(failed_machines)}. "
+        f"Menampilkan data parsial dari mesin yang berhasil ({len(success_machines)}/{len(target_machines)} mesin).",
+        icon="⚠️",
+    )
 
 if is_mock_flag:
     st.info("🧪 **Data contoh** — Sebagian data ditampilkan sebagai contoh (backend model belum tersedia atau USE_MOCK aktif).", icon="🧪")
 
 # Konversi ke DataFrame
 if all_alerts:
-    df_alerts = pd.DataFrame(all_alerts)
-    df_alerts["timestamp"] = pd.to_datetime(df_alerts["timestamp"])
-    if df_alerts["timestamp"].dt.tz is None:
-        df_alerts["timestamp"] = df_alerts["timestamp"].dt.tz_localize("UTC")
-    df_alerts["timestamp_wib"] = df_alerts["timestamp"].dt.tz_convert("Asia/Jakarta")
+    df_raw = pd.DataFrame(all_alerts)
+    df_raw["timestamp"] = pd.to_datetime(df_raw["timestamp"])
+    if df_raw["timestamp"].dt.tz is None:
+        df_raw["timestamp"] = df_raw["timestamp"].dt.tz_localize("UTC")
+    df_raw["timestamp_wib"] = df_raw["timestamp"].dt.tz_convert("Asia/Jakarta")
+
+    # Filter ketat berdasarkan rentang tanggal WIB yang dipilih pengguna
+    df_alerts = df_raw[
+        (df_raw["timestamp_wib"].dt.date >= sel_d_start) &
+        (df_raw["timestamp_wib"].dt.date <= sel_d_end)
+    ].copy()
+
     df_alerts["hour_wib"] = df_alerts["timestamp_wib"].dt.hour
     df_alerts["severity_num"] = df_alerts["severity"].map(SEVERITY_NUM).fillna(1)
     df_alerts["severity"] = df_alerts["severity"].str.lower()
 else:
     df_alerts = pd.DataFrame(columns=["machine_id", "timestamp", "timestamp_wib", "type", "severity", "note", "hour_wib", "severity_num"])
 
-# Filter severity
-if sel_severity != "Semua":
+# Filter tingkat keparahan (Severity)
+if sel_severity != "Semua" and not df_alerts.empty:
     df_alerts = df_alerts[df_alerts["severity"] == sel_severity]
+
+is_partial_data = len(failed_machines) > 0
 
 # ---------------------------------------------------------------------------
 # Empty State
@@ -182,14 +227,16 @@ if df_alerts.empty:
     )
     st.stop()
 
+
 # ---------------------------------------------------------------------------
-# 4. KPI Strip (4 kartu)
+# 4. KPI Strip Ringkas
 # ---------------------------------------------------------------------------
 total_alerts = len(df_alerts)
-most_severe = df_alerts.loc[df_alerts["severity_num"].idxmax(), "severity"] if not df_alerts.empty else "—"
-top_machine  = df_alerts["machine_id"].value_counts().idxmax() if not df_alerts.empty else "—"
-top_machine_count = int(df_alerts["machine_id"].value_counts().max()) if not df_alerts.empty else 0
-n_types = df_alerts["type"].nunique() if not df_alerts.empty else 0
+
+if is_partial_data:
+    kpi_sub_total = f'<span style="background:rgba(232,89,12,0.12); color:#E8590C; font-size:12px; font-weight:700; border-radius:12px; padding:2px 8px;">⚠️ Data Parsial ({len(success_machines)}/{len(target_machines)} Mesin)</span>'
+else:
+    kpi_sub_total = '<span class="badge-pill-green">Data Lengkap</span>'
 
 k1, k2, k3, k4 = st.columns(4)
 
@@ -197,34 +244,46 @@ with k1:
     st.markdown(
         "".join([
             '<div class="kpi-card-velora">',
-            '<div class="kpi-label">Total Kasus Alert</div>',
-            f'<div><span class="kpi-val">{total_alerts}</span><span class="kpi-unit">kasus</span></div>',
-            f'<div class="kpi-sub"><span class="badge-pill-orange">{n_types} Tipe Anomali</span></div>',
+            '<div class="kpi-label">Total Kasus Terdeteksi</div>',
+            f'<div><span class="kpi-val">{total_alerts}</span><span class="kpi-unit">Kasus</span></div>',
+            f'<div class="kpi-sub">{kpi_sub_total}</div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
     )
 
 with k2:
-    sev_badge = SEVERITY_BADGE.get(most_severe, f'<span>{most_severe}</span>')
+    if not df_alerts.empty:
+        max_sev_num = int(df_alerts["severity_num"].max())
+        max_sev_str = {3: "High", 2: "Medium", 1: "Low"}.get(max_sev_num, "—")
+        max_sev_color = {3: "#E8590C", 2: "#F2C230", 1: "#16A34A"}.get(max_sev_num, "#6B6259")
+    else:
+        max_sev_str, max_sev_color = "—", "#6B6259"
+
     st.markdown(
         "".join([
             '<div class="kpi-card-velora">',
-            '<div class="kpi-label">Severity Tertinggi Ditemukan</div>',
-            f'<div style="margin:6px 0;">{sev_badge}</div>',
-            f'<div class="kpi-sub" style="color:#6B6259;font-size:12px;">{int((df_alerts["severity"]==most_severe).sum())} kasus severity ini</div>',
+            '<div class="kpi-label">Severity Tertinggi</div>',
+            f'<div><span class="kpi-val" style="color:{max_sev_color};">{max_sev_str}</span></div>',
+            '<div class="kpi-sub"><span style="color:#6B6259; font-size:12px; font-weight:600;">Status Risiko</span></div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
     )
 
 with k3:
+    if not df_alerts.empty:
+        top_mach = df_alerts["machine_id"].value_index = df_alerts["machine_id"].value_counts().index[0]
+        top_mach_count = int(df_alerts["machine_id"].value_counts().iloc[0])
+    else:
+        top_mach, top_mach_count = "—", 0
+
     st.markdown(
         "".join([
             '<div class="kpi-card-velora">',
-            '<div class="kpi-label">Mesin Paling Sering Muncul</div>',
-            f'<div><span class="kpi-val" style="font-size:1.8rem;">{top_machine}</span></div>',
-            f'<div class="kpi-sub"><span class="badge-pill-orange">{top_machine_count} kasus</span></div>',
+            '<div class="kpi-label">Mesin Paling Boros</div>',
+            f'<div><span class="kpi-val">{top_mach}</span></div>',
+            f'<div class="kpi-sub"><span class="badge-pill-orange">{top_mach_count} Kejadian</span></div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
@@ -238,7 +297,7 @@ with k4:
         "".join([
             '<div class="kpi-card-velora">',
             '<div class="kpi-label">Sebaran Severity</div>',
-            f'<div style="display:flex;gap:10px;align-items:center;margin:6px 0;">',
+            '<div style="display:flex;gap:10px;align-items:center;margin:6px 0;">',
             f'<span style="font-size:12px;color:#E8590C;font-weight:700;">High {high_count}</span>',
             f'<span style="font-size:12px;color:#A07A00;font-weight:700;">Medium {med_count}</span>',
             f'<span style="font-size:12px;color:#16A34A;font-weight:700;">Low {low_count}</span>',
@@ -251,6 +310,7 @@ with k4:
 
 st.markdown("<div style='margin:1.2rem 0;'></div>", unsafe_allow_html=True)
 
+
 # ---------------------------------------------------------------------------
 # 5. Tabel Alert + Tombol Download CSV
 # ---------------------------------------------------------------------------
@@ -259,7 +319,7 @@ with tbl_hdr:
     st.markdown(
         "".join([
             '<div style="font-weight:800; font-size:1.1rem; color:#1F1A17; margin-bottom:4px;">Daftar Peringatan Pemborosan</div>',
-            '<div style="font-size:0.75rem; color:#6B6259; font-weight:600;">Waktu dalam WIB · Semua data dari API /waste-alerts</div>',
+            '<div style="font-size:0.75rem; color:#6B6259; font-weight:600;">Waktu dalam WIB · Data tersortir dari yang terbaru</div>',
         ]),
         unsafe_allow_html=True,
     )
@@ -272,38 +332,42 @@ with tbl_btn:
     st.download_button(
         label="⬇ Unduh CSV",
         data=csv_buf.getvalue(),
-        file_name=f"waste_alerts_{date_range[0]}_{date_range[1]}.csv",
+        file_name=f"waste_alerts_{sel_d_start}_{sel_d_end}.csv",
         mime="text/csv",
         use_container_width=True,
     )
 
 st.markdown("<div style='margin:8px 0;'></div>", unsafe_allow_html=True)
 
-# Render tabel dengan st.dataframe (badge severity via kolom teks biasa)
+# Urutkan secara kronologis terbalik (paling baru di atas) sebelum diformat
 df_table = df_alerts[["timestamp_wib", "machine_id", "type", "severity", "note"]].copy()
-df_table = df_table.rename(columns={
-    "timestamp_wib": "Waktu (WIB)",
-    "machine_id": "Mesin",
-    "type": "Tipe Anomali",
-    "severity": "Severity",
-    "note": "Rekomendasi / Catatan",
-})
-df_table["Waktu (WIB)"] = df_table["Waktu (WIB)"].dt.strftime("%d %b %Y, %H:%M WIB")
-df_table["Tipe Anomali"] = df_table["Tipe Anomali"].str.replace("_", " ").str.title()
-df_table["Severity"] = df_table["Severity"].str.capitalize()
-df_table["Rekomendasi / Catatan"] = df_table["Rekomendasi / Catatan"].fillna("—").replace("", "—")
-df_table = df_table.sort_values("Waktu (WIB)", ascending=False).reset_index(drop=True)
+df_table = df_table.sort_values("timestamp_wib", ascending=False).reset_index(drop=True)
 
+df_table["Waktu (WIB)"] = df_table["timestamp_wib"].dt.strftime("%d %b %Y, %H:%M WIB")
+df_table["Tipe Anomali"] = df_table["type"].str.replace("_", " ").str.title()
+df_table["Severity"] = df_table["severity"].str.capitalize()
+df_table["Rekomendasi / Catatan"] = df_table["note"].fillna("—").replace("", "—")
+
+df_display = df_table[["Waktu (WIB)", "machine_id", "Tipe Anomali", "Severity", "Rekomendasi / Catatan"]].rename(
+    columns={"machine_id": "Mesin"}
+)
+
+# Render tabel interaktif dengan lebar kolom Rekomendasi lebar agar teks tidak terpotong
 st.dataframe(
-    df_table,
+    df_display,
     use_container_width=True,
     hide_index=True,
     column_config={
-        "Severity": st.column_config.TextColumn("Severity", width="small"),
+        "Waktu (WIB)": st.column_config.TextColumn("Waktu (WIB)", width="medium"),
+        "Mesin": st.column_config.TextColumn("Mesin", width="small"),
+        "Tipe Anomali": st.column_config.TextColumn("Tipe Pemborosan", width="medium"),
+        "Severity": st.column_config.TextColumn("Tingkat Keparahan", width="small"),
+        "Rekomendasi / Catatan": st.column_config.TextColumn("Rekomendasi Tindakan", width="large"),
     },
 )
 
 st.markdown("<div style='margin:1.4rem 0;'></div>", unsafe_allow_html=True)
+
 
 # ---------------------------------------------------------------------------
 # 6. Visualisasi: Bar chart per mesin & Bubble chart jam vs jumlah alert
@@ -321,146 +385,151 @@ with vis_c1:
         unsafe_allow_html=True,
     )
 
-    machine_counts = df_alerts["machine_id"].value_counts().reset_index()
-    machine_counts.columns = ["machine_id", "count"]
-    machine_counts = machine_counts.sort_values("count", ascending=True)
-
-    # Gradasi warna: sedikit kuning → banyak oranye
-    n = len(machine_counts)
-    bar_colors = [
-        f"rgba(232, 89, 12, {0.4 + 0.6 * (i / max(n - 1, 1))})"
-        for i in range(n)
-    ]
+    mach_counts = df_alerts.groupby("machine_id").size().reset_index(name="count").sort_values("count", ascending=True)
 
     fig_bar = go.Figure(
         go.Bar(
-            x=machine_counts["count"],
-            y=machine_counts["machine_id"],
+            x=mach_counts["count"],
+            y=mach_counts["machine_id"],
             orientation="h",
-            marker=dict(color=bar_colors, line_width=0),
-            hovertemplate="<b>%{y}</b><br>Jumlah Alert: <b>%{x}</b><extra></extra>",
+            marker=dict(
+                color=mach_counts["count"],
+                colorscale=[[0.0, "#FCD34D"], [1.0, "#E8590C"]],
+                showscale=False,
+                cornerradius=6,
+            ),
+            text=mach_counts["count"],
+            textposition="outside",
+            textfont=dict(size=12, color="#1F1A17", family="Plus Jakarta Sans"),
+            hovertemplate="<b>Mesin %{y}</b><br>Total Alert: %{x} kasus<extra></extra>",
         )
     )
-    style_plotly_fig(fig_bar, height=240)
+    style_plotly_fig(fig_bar, height=220)
     fig_bar.update_layout(
-        margin=dict(l=10, r=20, t=10, b=20),
-        showlegend=False,
-        xaxis=dict(title="Jumlah Kasus", tickfont=dict(size=12)),
-        yaxis=dict(tickfont=dict(size=12)),
+        margin=dict(l=10, r=30, t=10, b=10),
+        xaxis=dict(title="Jumlah Kasus", showgrid=True, zeroline=False),
+        yaxis=dict(title="", tickfont=dict(size=12, color="#1F1A17")),
     )
     st.plotly_chart(fig_bar, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Bubble chart: Jam WIB vs Jumlah Alert, ukuran & warna = severity ---
+# --- Bubble Chart: Jam WIB vs Jumlah Alert ---
 with vis_c2:
     st.markdown(
         "".join([
             '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">',
-            '<div style="font-weight:800; font-size:1rem; color:#1F1A17; margin-bottom:2px;">Distribusi Waktu Alert (Jam WIB)</div>',
-            '<div style="font-size:0.75rem; color:#6B6259; margin-bottom:10px;">Sumbu X = jam WIB (0-23) · Sumbu Y = jumlah kasus per jam · Ukuran = rata-rata severity</div>',
+            '<div style="font-weight:800; font-size:1rem; color:#1F1A17; margin-bottom:4px;">Distribusi Jam Kejadian (WIB)</div>',
+            '<div style="font-size:0.75rem; color:#6B6259; margin-bottom:10px;">Jam operasional terjadinya anomali (ukuran bubble = rata-rata keparahan)</div>',
         ]),
         unsafe_allow_html=True,
     )
 
-    # Agregasi per jam: hitung jumlah alert dan rata-rata severity_num
-    hour_agg = (
-        df_alerts.groupby("hour_wib", as_index=False)
-        .agg(count=("machine_id", "count"), avg_sev=("severity_num", "mean"))
-    )
-    hour_agg["bubble_size"] = hour_agg["avg_sev"] * 20  # skala visual
-    hour_agg["color"] = hour_agg["avg_sev"].apply(
-        lambda s: "#E8590C" if s >= 2.5 else ("#F2C230" if s >= 1.5 else "#16A34A")
+    hourly_grp = (
+        df_alerts.groupby("hour_wib")
+        .agg(count=("severity_num", "count"), avg_sev=("severity_num", "mean"))
+        .reset_index()
     )
 
-    fig_bubble = go.Figure()
-    for _, row in hour_agg.iterrows():
-        fig_bubble.add_trace(
-            go.Scatter(
-                x=[row["hour_wib"]],
-                y=[row["count"]],
-                mode="markers",
-                marker=dict(
-                    size=row["bubble_size"],
-                    color=row["color"],
-                    opacity=0.7,
-                    line=dict(color="rgba(255,255,255,0.6)", width=1.5),
-                ),
-                name=f"Jam {int(row['hour_wib']):02d}:00",
-                hovertemplate=(
-                    f"<b>Jam {int(row['hour_wib']):02d}:00 WIB</b><br>"
-                    f"Jumlah Alert: <b>{int(row['count'])}</b><br>"
-                    f"Rata-rata Severity: <b>{'High' if row['avg_sev']>=2.5 else 'Medium' if row['avg_sev']>=1.5 else 'Low'}</b>"
-                    "<extra></extra>"
-                ),
-            )
+    all_hours = pd.DataFrame({"hour_wib": list(range(24))})
+    hourly_grp = all_hours.merge(hourly_grp, on="hour_wib", how="left").fillna({"count": 0, "avg_sev": 1})
+
+    fig_bubble = go.Figure(
+        go.Scatter(
+            x=hourly_grp["hour_wib"],
+            y=hourly_grp["count"],
+            mode="markers+lines",
+            line=dict(color="rgba(232, 89, 12, 0.3)", width=1.5, dash="dot"),
+            marker=dict(
+                size=hourly_grp["count"].apply(lambda c: max(8, min(36, c * 6))),
+                color=hourly_grp["avg_sev"],
+                colorscale=[[0.0, "#16A34A"], [0.5, "#F2C230"], [1.0, "#E8590C"]],
+                showscale=False,
+                line=dict(color="#FFFFFF", width=1.5),
+            ),
+            hovertemplate="<b>Jam %{x:02d}:00 WIB</b><br>Jumlah Alert: %{y}<br>Avg Severity: %{marker.color:.1f}/3<extra></extra>",
         )
-
-    # Legenda severity manual via annotation
-    fig_bubble.add_annotation(x=23, y=1.0, text='<span style="font-size:11px;color:#E8590C;">● High</span>', showarrow=False, xanchor="right")
-    fig_bubble.add_annotation(x=23, y=0.6, text='<span style="font-size:11px;color:#A07A00;">● Medium</span>', showarrow=False, xanchor="right")
-    fig_bubble.add_annotation(x=23, y=0.2, text='<span style="font-size:11px;color:#16A34A;">● Low</span>', showarrow=False, xanchor="right")
-
-    style_plotly_fig(fig_bubble, height=240)
+    )
+    style_plotly_fig(fig_bubble, height=220)
     fig_bubble.update_layout(
-        showlegend=False,
-        margin=dict(l=10, r=20, t=10, b=20),
-        xaxis=dict(title="Jam WIB (0-23)", tickvals=list(range(0, 24, 2)), tickfont=dict(size=12), range=[-1, 24]),
-        yaxis=dict(title="Jumlah Kasus", tickfont=dict(size=12)),
+        margin=dict(l=10, r=10, t=10, b=25),
+        xaxis=dict(
+            title="Jam WIB (00–23)",
+            tickmode="linear",
+            tick0=0,
+            dtick=2,
+            tickfont=dict(size=11),
+        ),
+        yaxis=dict(title="Jumlah Kasus", showgrid=True),
     )
     st.plotly_chart(fig_bubble, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("<div style='margin:1.4rem 0;'></div>", unsafe_allow_html=True)
 
+
 # ---------------------------------------------------------------------------
-# 7. Mini Alert Card: Sebaran per Tipe Alert
+# 7. Mini Alert Cards per Tipe
 # ---------------------------------------------------------------------------
 st.markdown(
-    "".join([
-        '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">',
-        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">',
-        '<div style="font-weight:800; font-size:1rem; color:#1F1A17;">Sebaran per Tipe Anomali</div>',
-        f'<span class="badge-pill-orange">{total_alerts} Total Kasus</span>',
-        '</div>',
-    ]),
+    '<div style="font-weight:800; font-size:1.1rem; color:#1F1A17; margin-bottom:12px;">Rincian Berdasarkan Kategori Pemborosan</div>',
     unsafe_allow_html=True,
 )
 
-type_counts = df_alerts["type"].value_counts()
-type_cols_parts = []
-for atype, count in type_counts.items():
-    readable = str(atype).replace("_", " ").title()
-    pct = count / total_alerts * 100 if total_alerts else 0
-    # Bar mini per tipe
-    type_cols_parts.append(
-        "".join([
-            '<div style="flex:1; min-width:120px; padding:10px 12px; background:#FAF4E8; border-radius:12px; text-align:center;">',
-            f'<div style="font-size:1.3rem; font-weight:800; color:#E8590C; margin-bottom:4px;">{count}</div>',
-            f'<div style="font-size:0.72rem; font-weight:700; color:#1F1A17; margin-bottom:4px;">{readable}</div>',
-            f'<div style="background:#EFE5D6; height:5px; border-radius:3px; overflow:hidden;">',
-            f'<div style="background:#E8590C; width:{min(pct,100):.0f}%; height:100%; border-radius:3px;"></div>',
-            '</div>',
-            f'<div style="font-size:0.68rem; color:#6B6259; margin-top:3px;">{pct:.1f}%</div>',
-            '</div>',
-        ])
-    )
+type_counts = df_alerts["type"].value_counts().to_dict()
 
-type_grid_html = "".join([
-    '<div style="display:flex; flex-wrap:wrap; gap:10px;">',
-    "".join(type_cols_parts),
-    '</div>',
-    '</div>',
-])
-st.markdown(type_grid_html, unsafe_allow_html=True)
+TYPE_META = {
+    "idle_power_waste": {
+        "title": "Idle Power Waste",
+        "desc": "Mesin dalam kondisi standby (idle) namun mengonsumsi daya listrik di atas ambang batas toleransi tanpa ada aktivitas produksi aktif.",
+        "icon": "⏳",
+        "border_color": "#F2C230",
+    },
+    "over_capacity_load": {
+        "title": "Beban Berlebih (Overcapacity)",
+        "desc": "Beban daya listrik mesin melampaui rated power kapasitas nominal, berisiko menyebabkan degradasi komponen mesin dan trip breaker.",
+        "icon": "⚡",
+        "border_color": "#E8590C",
+    },
+    "peak_hour_surge": {
+        "title": "Lonjakan Jam Puncak",
+        "desc": "Lonjakan konsumsi energi tinggi pada jam beban puncak tarif listrik pabrik (peak hours) yang dapat meningkatkan tagihan biaya listrik.",
+        "icon": "📈",
+        "border_color": "#E8590C",
+    },
+    "running_no_production": {
+        "title": "Running Tanpa Produksi",
+        "desc": "Mesin beroperasi dalam status running namun tidak ada output hasil kerja yang terdata pada jadwal shift berjalan.",
+        "icon": "⚙️",
+        "border_color": "#F2C230",
+    },
+}
 
-# Footer
-st.markdown(
-    "".join([
-        '<div style="text-align:right; font-size:12px; color:#6B6259; margin-top:20px;">',
-        f'Filter: <b>{"Semua Mesin" if sel_machine=="Semua Mesin" else sel_machine}</b> · ',
-        f'Severity: <b>{"Semua" if sel_severity=="Semua" else sel_severity.capitalize()}</b> · ',
-        f'Periode: <b>{date_range[0]} – {date_range[1]} (WIB)</b>',
-        '</div>',
-    ]),
-    unsafe_allow_html=True,
-)
+all_types = list(TYPE_META.keys())
+card_cols = st.columns(len(all_types))
+
+for i, atype in enumerate(all_types):
+    meta = TYPE_META[atype]
+    cnt = type_counts.get(atype, 0)
+    pct = (cnt / total_alerts * 100) if total_alerts > 0 else 0.0
+
+    with card_cols[i]:
+        st.markdown(
+            "".join([
+                f'<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-top:3px solid {meta["border_color"]}; border-radius:16px; padding:16px 18px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%;">',
+                f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">',
+                f'<span style="font-size:1.4rem;">{meta["icon"]}</span>',
+                f'<span class="badge-pill-orange">{cnt} Kasus</span>',
+                '</div>',
+                f'<div style="font-weight:700; font-size:0.92rem; color:#1F1A17; margin-bottom:6px;">{meta["title"]}</div>',
+                f'<div style="font-size:0.75rem; color:#6B6259; line-height:1.4; margin-bottom:12px;">{meta["desc"]}</div>',
+                f'<div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600; color:#8C827A; margin-bottom:3px;">',
+                '<span>Proporsi Kasus</span>',
+                f'<span>{pct:.1f}%</span>',
+                '</div>',
+                f'<div style="background:#F2ECE2; height:5px; border-radius:3px; overflow:hidden;">',
+                f'<div style="background:{meta["border_color"]}; width:{pct:.1f}%; height:100%; border-radius:3px;"></div>',
+                '</div>',
+                '</div>',
+            ]),
+            unsafe_allow_html=True,
+        )

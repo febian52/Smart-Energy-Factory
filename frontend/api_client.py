@@ -126,14 +126,15 @@ def _mock_waste_alerts(machine_id: str, start: Optional[datetime], end: Optional
 # HTTP helper
 # ---------------------------------------------------------------------------
 
-def _get(path: str, params: dict | None = None, base_url: str | None = None) -> dict | list:
+def _get(path: str, params: dict | None = None, base_url: str | None = None, timeout: int | None = None) -> dict | list:
     """Lakukan GET ke BASE_URL + path; lempar RuntimeError yang informatif.
     Meneruskan status_code asli sebagai atribut RuntimeError sehingga pemanggil
     dapat membedakan 503 dari error koneksi.
     """
     url = f"{base_url or BASE_URL}{path}"
+    req_timeout = timeout if timeout is not None else TIMEOUT
     try:
-        resp = requests.get(url, params=params, timeout=TIMEOUT)
+        resp = requests.get(url, params=params, timeout=req_timeout)
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.ConnectionError:
@@ -141,7 +142,7 @@ def _get(path: str, params: dict | None = None, base_url: str | None = None) -> 
         exc.status_code = None  # type: ignore[attr-defined]
         raise exc
     except requests.exceptions.Timeout:
-        exc = RuntimeError(f"Request timeout setelah {TIMEOUT}s: {url}")
+        exc = RuntimeError(f"Request timeout setelah {req_timeout}s: {url}")
         exc.status_code = None  # type: ignore[attr-defined]
         raise exc
     except requests.exceptions.HTTPError as http_exc:
@@ -390,6 +391,7 @@ def get_waste_alerts(
     machine_id: str,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
+    timeout: Optional[int] = None,
 ) -> dict:
     """
     GET /waste-alerts?machine_id=...&start=...&end=...
@@ -408,7 +410,7 @@ def get_waste_alerts(
     if end:
         params["end"] = end.isoformat()
     try:
-        raw = _get("/waste-alerts", params=params)
+        raw = _get("/waste-alerts", params=params, timeout=timeout)
         return _normalize_waste(raw, machine_id, start, end)
     except RuntimeError as exc:
         status = getattr(exc, "status_code", None)

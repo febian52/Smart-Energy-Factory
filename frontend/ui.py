@@ -344,6 +344,28 @@ CUSTOM_CSS = """
         box-shadow: 0 4px 12px rgba(232, 89, 12, 0.12) !important;
         transform: translateY(-1px);
     }
+
+    /* ---- Text Wrap & Padding untuk Sel Tabel st.dataframe ---- */
+    [data-testid="stDataFrame"] div[role="gridcell"] {
+        white-space: normal !important;
+        word-break: break-word !important;
+        line-height: 1.4 !important;
+    }
+
+    /* ---- Fallback Ganti Nama 'app' -> 'Beranda' di Sidebar Navigasi ---- */
+    [data-testid="stSidebarNav"] li:first-child a span {
+        display: none !important;
+    }
+    [data-testid="stSidebarNav"] li:first-child a::after {
+        content: "Beranda";
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #6B6259;
+    }
+    [data-testid="stSidebarNav"] li:first-child a[aria-current="page"]::after {
+        color: #E8590C !important;
+        font-weight: 700;
+    }
 </style>
 """
 
