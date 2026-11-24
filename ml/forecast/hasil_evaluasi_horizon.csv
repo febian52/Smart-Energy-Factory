@@ -1,0 +1,5 @@
+bucket,XGBoost,SeasonalNaive(168h)
+1-6 jam,4.962,7.985
+7-24 jam,6.25,7.143
+25-72 jam,6.579,7.344
+73-168 jam,6.433,7.366
