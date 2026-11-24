@@ -24,6 +24,8 @@ try:
     from frontend.ui import (
         apply_theme,
         style_plotly_fig,
+        format_id_num,
+        format_id_currency,
     )
 except ImportError:
     import api_client as ac
@@ -37,6 +39,8 @@ except ImportError:
     from ui import (
         apply_theme,
         style_plotly_fig,
+        format_id_num,
+        format_id_currency,
     )
 
 # Model ML memprediksi hingga 168 jam secara autoregresif (168 langkah inferensi).
@@ -56,21 +60,6 @@ except Exception:
 
 # Terapkan Tema Warm Light
 apply_theme()
-
-
-# ---------------------------------------------------------------------------
-# Helper Pemformat Angka Gaya Indonesia
-# ---------------------------------------------------------------------------
-def format_id_num(val: float, decimals: int = 1) -> str:
-    """Format angka ribuan titik dan desimal koma (misal: 3.569,5)."""
-    s = f"{val:,.{decimals}f}"
-    return s.replace(",", "_").replace(".", ",").replace("_", ".")
-
-
-def format_id_currency(val: float) -> str:
-    """Format mata uang Rupiah bulat (misal: Rp 5.354.250)."""
-    s = f"{round(val):,}"
-    return f"Rp {s.replace(',', '.')}"
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +245,7 @@ with kpi_c2:
         f'<span class="kpi-val" style="font-size:1.45rem;">{peak_time_str}</span>',
         '</div>',
         '<div class="kpi-sub" style="margin-top:4px;">',
-        f'<span class="badge-pill-orange">Beban Puncak: {peak_val:.2f} kWh</span>',
+        f'<span class="badge-pill-orange">Beban Puncak: {format_id_num(peak_val, 2)} kWh</span>',
         '</div>',
         '</div>',
     ])
@@ -270,7 +259,7 @@ with kpi_c3:
         f'<span class="kpi-val">{format_id_currency(cost_pred)}</span>',
         '</div>',
         '<div class="kpi-sub" style="margin-top:4px;">',
-        f'<span class="badge-pill-orange">⚡ Tarif Rp {TARIF_PER_KWH:,}</span> ',
+        f'<span class="badge-pill-orange">⚡ Tarif {format_id_currency(TARIF_PER_KWH)}</span> ',
         '<span style="color:#6B6259; font-weight:500; font-size:12px;">per kWh</span>',
         '</div>',
         '</div>',
@@ -395,7 +384,7 @@ with st.container(border=True):
         warning_capacity_html = "".join([
             '<div style="font-size:12px; color:#E8590C; font-weight:600; padding:8px 12px; background:rgba(232,89,12,0.06); border-radius:8px; border:1px solid rgba(232,89,12,0.2); margin-top:8px; display:flex; align-items:center; gap:8px;">',
             '<span>⚠️</span>',
-            f'<span><b>Prediksi melebihi kapasitas mesin:</b> Terdeteksi {exceeded_count} jam proyeksi dengan beban di atas rated power ({rated_kw:.1f} kW), nilai tertinggi mencapai {max_pred_val:.2f} kWh.</span>',
+            f'<span><b>Prediksi melebihi kapasitas mesin:</b> Terdeteksi {exceeded_count} jam proyeksi dengan beban di atas rated power ({format_id_num(rated_kw, 1)} kW), nilai tertinggi mencapai {format_id_num(max_pred_val, 2)} kWh.</span>',
             '</div>',
         ])
         st.markdown(warning_capacity_html, unsafe_allow_html=True)
@@ -404,7 +393,7 @@ with st.container(border=True):
 st.markdown(
     "".join([
         '<div style="text-align: right; font-size: 12px; color: #6B6259; margin-top: 20px;">',
-        f'Mesin: <b>{selected_machine_id}</b> (Kapasitas: <b>{rated_kw:.1f} kW</b>) · Horizon Prediksi: <b>{selected_hours} Jam</b> · Ditampilkan dalam Waktu Indonesia Barat (WIB)',
+        f'Mesin: <b>{selected_machine_id}</b> (Kapasitas: <b>{format_id_num(rated_kw, 1)} kW</b>) · Horizon Prediksi: <b>{selected_hours} Jam</b> · Ditampilkan dalam Waktu Indonesia Barat (WIB)',
         '</div>',
     ]),
     unsafe_allow_html=True,

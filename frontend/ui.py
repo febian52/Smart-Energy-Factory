@@ -23,6 +23,22 @@ _ACCENT_YELLOW = "#F2C230"
 _ACCENT_GREEN = "#16A34A"
 _BORDER_WARM = "#EFE5D6"
 
+
+# ---------------------------------------------------------------------------
+# Helper Pemformat Angka & Mata Uang Gaya Indonesia (Sentralisasi)
+# ---------------------------------------------------------------------------
+def format_id_num(val: float, decimals: int = 1) -> str:
+    """Format angka ribuan titik dan desimal koma gaya Indonesia (misal: 3.569,5)."""
+    s = f"{val:,.{decimals}f}"
+    return s.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def format_id_currency(val: float) -> str:
+    """Format mata uang Rupiah bulat gaya Indonesia (misal: Rp 1.500)."""
+    s = f"{round(val):,}"
+    return f"Rp {s.replace(',', '.')}"
+
+
 # ---------------------------------------------------------------------------
 # Injeksi CSS Kustom: Warm Light Theme (Velora Aesthetic)
 # ---------------------------------------------------------------------------
