@@ -363,7 +363,7 @@ chart_card_header = "".join([
     '</div>',
 ])
 st.markdown(chart_card_header, unsafe_allow_html=True)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 # 6. Pengecekan apakah angka prediksi per jam melebihi rated_power_kw mesin
 # Jangan menyesuaikan atau memotong angka prediksi, hanya tampilkan peringatan

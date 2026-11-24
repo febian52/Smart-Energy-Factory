@@ -1,13 +1,13 @@
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta, time
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-# Setup sys.path agar import api_client dan ui berfungsi dari root atau subfolder
 CURRENT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURRENT_DIR.parent.parent
 for p in (str(CURRENT_DIR.parent), str(ROOT_DIR)):
@@ -45,8 +45,10 @@ st.set_page_config(
     layout="wide",
 )
 
-# Terapkan Tema Warm Light
 apply_theme()
+
+WIB_TZ = ZoneInfo("Asia/Jakarta")
+UTC_TZ = ZoneInfo("UTC")
 
 
 # ---------------------------------------------------------------------------
@@ -65,51 +67,78 @@ def format_id_currency(val: float) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Fungsi Cache untuk Mengambil Data 7 Hari Terakhir
+# ---------------------------------------------------------------------------
+@st.cache_data(ttl=600, show_spinner=False)
+def load_overview_data(start_utc_iso: str, end_utc_iso: str):
+    s_utc = datetime.fromisoformat(start_utc_iso)
+    e_utc = datetime.fromisoformat(end_utc_iso)
+
+    machines = get_machines()
+    total_rated_kw = sum(float(m.get("rated_power_kw", 0)) for m in machines) if machines else 466.0
+
+    all_readings: list[dict] = []
+    data_is_truncated = False
+
+    for m in machines:
+        mid = m["machine_id"]
+        rows = get_energy(mid, start=s_utc, end=e_utc, limit=10000)
+        if len(rows) >= 10000:
+            data_is_truncated = True
+        all_readings.extend(rows)
+
+    all_alerts: list[dict] = []
+    has_mock_alert = False
+    for m in machines:
+        mid = m["machine_id"]
+        try:
+            res = get_waste_alerts(mid, start=s_utc, end=e_utc, timeout=45)
+            alerts = res.get("alerts", [])
+            all_alerts.extend(alerts)
+            if res.get("is_mock"):
+                has_mock_alert = True
+        except Exception:
+            pass
+
+    return machines, all_readings, all_alerts, has_mock_alert, total_rated_kw, data_is_truncated
+
+
+# ---------------------------------------------------------------------------
 # Pengambilan Data Backend
 # ---------------------------------------------------------------------------
 try:
-    with st.spinner("Mengambil data overview dari server..."):
-        summary_data = get_summary()
-        machines = get_machines()
-        start_dt, end_dt = get_data_range()
+    with st.spinner("Mengambil data overview 7 hari terakhir dari server..."):
+        # Dapatkan batas asli database
+        s_raw, e_raw = get_data_range()
+        if e_raw.tzinfo is None:
+            e_wib = e_raw.replace(tzinfo=UTC_TZ).astimezone(WIB_TZ)
+        else:
+            e_wib = e_raw.astimezone(WIB_TZ)
 
-        # Ambil semua alert pemborosan untuk rentang yang sedang tampil
-        all_alerts: list[dict] = []
-        has_mock_alert = False
+        # Default rentang: 7 hari terakhir dari akhir data asli (WIB)
+        default_end_wib = e_wib.date()
+        default_start_wib = default_end_wib - timedelta(days=6)
 
-        if machines:
-            for m in machines:
-                mid = m.get("machine_id")
-                try:
-                    waste_res = get_waste_alerts(mid, start=start_dt, end=end_dt)
-                    alerts_list = waste_res.get("alerts", [])
-                    all_alerts.extend(alerts_list)
-                    if waste_res.get("is_mock"):
-                        has_mock_alert = True
-                except Exception:
-                    # Jika endpoint error atau timeout, jangan hentikan seluruh halaman
-                    pass
+        # Konversi ke UTC untuk query API
+        wib_start_dt = datetime.combine(default_start_wib, time.min, tzinfo=WIB_TZ)
+        wib_end_dt   = datetime.combine(default_end_wib, time.max.replace(microsecond=0), tzinfo=WIB_TZ)
+        query_start_utc = wib_start_dt.astimezone(UTC_TZ).replace(tzinfo=None)
+        query_end_utc   = wib_end_dt.astimezone(UTC_TZ).replace(tzinfo=None)
+
+        (
+            machines,
+            all_readings,
+            all_alerts,
+            has_mock_alert,
+            total_rated_kw,
+            data_is_truncated,
+        ) = load_overview_data(query_start_utc.isoformat(), query_end_utc.isoformat())
 
         total_waste_alerts = len(all_alerts)
-
-        # Hitung sebaran alert per tipe apa adanya dari data
         alert_type_counts: dict[str, int] = {}
         for a in all_alerts:
             t = a.get("type", "unknown")
             alert_type_counts[t] = alert_type_counts.get(t, 0) + 1
-
-        # Pengambilan Data Time-Series Pembacaan Sensor
-        all_readings: list[dict] = []
-        data_is_truncated = False
-
-        if machines:
-            for m in machines:
-                mid = m.get("machine_id")
-                rows = get_energy(mid, start=start_dt, end=end_dt, limit=10000)
-                if len(rows) >= 10000:
-                    data_is_truncated = True
-                if rows:
-                    all_readings.extend(rows)
 
 except RuntimeError as exc:
     st.error(
@@ -123,11 +152,7 @@ except Exception as exc:
     st.stop()
 
 if data_is_truncated:
-    st.warning("⚠️ **Peringatan Batas Data:** Data pembacaan energi mencapai batas maksimal 10.000 baris. Beberapa data mungkin terpotong.")
-
-total_kwh = summary_data.get("total_kwh", 0.0) if summary_data else 0.0
-cost_rp = summary_data.get("estimated_cost_rp", 0) if summary_data else 0
-total_rated_kw = sum(float(m.get("rated_power_kw", 0)) for m in machines) if machines else 1.0
+    st.warning("⚠️ **Peringatan Batas Data:** Sebagian data mencapai batas 10.000 baris. Menampilkan data sebagian.")
 
 # Derivasi informasi lini produksi dari get_machines()
 unique_lines = sorted(list({str(m.get("line")).strip() for m in machines if m.get("line")}))
@@ -136,8 +161,10 @@ if unique_lines:
 else:
     lines_str = f"{len(machines)} MESIN"
 
+
 # ---------------------------------------------------------------------------
-# Pemrosesan Data & Konversi Waktu UTC ke WIB
+# Pemrosesan Data & Agregasi Daya Sesuai Formula Fisik
+# Total kW per jam = rata-rata power_kw per (mesin, jam), lalu dijumlahkan antar mesin
 # ---------------------------------------------------------------------------
 if all_readings:
     df_readings = pd.DataFrame(all_readings)
@@ -151,22 +178,40 @@ if all_readings:
     # Derivasi rentang periode dari data yang tampil dalam format WIB
     min_wib = df_readings["timestamp_wib"].min().strftime("%d %b %Y").upper()
     max_wib = df_readings["timestamp_wib"].max().strftime("%d %b %Y").upper()
-    if min_wib == max_wib:
-        period_str = f"PERIODE: {min_wib} (WIB)"
-    else:
-        period_str = f"PERIODE: {min_wib} – {max_wib} (WIB)"
+    period_str = f"PERIODE: {min_wib} – {max_wib} (WIB)"
 
-    # Deret TOTAL daya semua mesin per jam
+    # Total Konsumsi Energi & Estimasi Biaya untuk rentang yang sedang tampil
+    total_kwh = float(df_readings["energy_kwh"].sum())
+    cost_rp = total_kwh * 1500
+
+    # 1. Rata-rata power_kw per (mesin, jam_wib)
+    mach_hourly_kw = (
+        df_readings.groupby(["machine_id", "hour_wib"], as_index=False)["power_kw"]
+        .mean()
+    )
+
+    # 2. Total kW per jam pabrik = jumlah antar mesin
     hourly_total = (
-        df_readings.groupby("hour_wib", as_index=False)
-        .agg({"power_kw": "sum", "energy_kwh": "sum"})
+        mach_hourly_kw.groupby("hour_wib", as_index=False)["power_kw"]
+        .sum()
         .sort_values("hour_wib")
     )
+
+    # 3. Energi per jam = jumlah energy_kwh
+    hourly_energy = (
+        df_readings.groupby("hour_wib", as_index=False)["energy_kwh"]
+        .sum()
+        .sort_values("hour_wib")
+    )
+    hourly_total["energy_kwh"] = hourly_energy["energy_kwh"]
 
     cur_power = float(hourly_total["power_kw"].iloc[-1]) if not hourly_total.empty else 0.0
     min_power = float(hourly_total["power_kw"].min()) if not hourly_total.empty else 0.0
     max_power = float(hourly_total["power_kw"].max()) if not hourly_total.empty else 0.0
     avg_power = float(hourly_total["power_kw"].mean()) if not hourly_total.empty else 0.0
+
+    # Sanity check: Utilisasi daya = avg_power / total_rated_kw * 100
+    utilisasi_pct = (avg_power / total_rated_kw * 100) if total_rated_kw > 0 else 0.0
 
     # Perhitungan Delta Konsumsi: Membandingkan dua hari WIB LENGKAP (24 jam penuh) terakhir
     df_readings["hour_int"] = df_readings["timestamp_wib"].dt.hour
@@ -193,9 +238,6 @@ if all_readings:
     else:
         delta_html = '<span style="color:#6B6259; font-size:12px;">—</span>'
 
-    # Utilisasi = rata-rata daya total dibagi jumlah rated_power_kw
-    utilisasi_pct = (avg_power / total_rated_kw * 100) if total_rated_kw > 0 else 0.0
-
     # Proporsi Running vs Idle dari total energi terbaca
     run_kwh = float(df_readings[df_readings["status"] == "running"]["energy_kwh"].sum())
     idle_kwh = float(df_readings[df_readings["status"] == "idle"]["energy_kwh"].sum())
@@ -204,7 +246,8 @@ if all_readings:
     pct_idle_val = (idle_kwh / tot_status_kwh * 100) if tot_status_kwh > 0 else 0.0
 
 else:
-    period_str = f"PERIODE: {start_dt.strftime('%d %b %Y').upper()} – {end_dt.strftime('%d %b %Y').upper()} (WIB)"
+    period_str = f"PERIODE: {default_start_wib.strftime('%d %b %Y').upper()} – {default_end_wib.strftime('%d %b %Y').upper()} (WIB)"
+    total_kwh, cost_rp = 0.0, 0
     hourly_total = pd.DataFrame()
     cur_power, min_power, max_power, avg_power = 0.0, 0.0, 0.0, 0.0
     utilisasi_pct = 0.0
@@ -212,11 +255,12 @@ else:
     pct_run_val, pct_idle_val = 0.0, 0.0
     delta_html = '<span style="color:#6B6259; font-size:12px;">—</span>'
 
-# Subjudul halaman diturunkan langsung dari data
+# Subjudul halaman: lini + rentang periode yang tampil (WIB)
 subjudul_halaman = f"// {lines_str} · {period_str}"
 
+
 # ---------------------------------------------------------------------------
-# Header Halaman & Segmented Filter Control (Top Bar)
+# Header Halaman & Filter Granularitas
 # ---------------------------------------------------------------------------
 header_col1, header_col2 = st.columns([2.2, 1.2])
 
@@ -243,15 +287,16 @@ with header_col2:
         label_visibility="collapsed",
     )
 
+
 # ---------------------------------------------------------------------------
-# Kartu KPI Atas (3 Kolom: Total Konsumsi, Daya Saat Ini, Estimasi Biaya)
+# Kartu KPI Atas (Semua KPI memakai rentang periode yang sama)
 # ---------------------------------------------------------------------------
 kpi_c1, kpi_c2, kpi_c3 = st.columns(3)
 
 with kpi_c1:
     st.markdown(
         f"""
-        <div class="kpi-card-velora">
+        <div class="kpi-card-velora" style="height:100%;">
             <div class="kpi-label">Total Konsumsi Energi</div>
             <div>
                 <span class="kpi-val">{format_id_num(total_kwh, 1)}</span>
@@ -268,7 +313,7 @@ with kpi_c1:
 with kpi_c2:
     st.markdown(
         f"""
-        <div class="kpi-card-velora">
+        <div class="kpi-card-velora" style="height:100%;">
             <div class="kpi-label">Daya total jam terakhir data</div>
             <div>
                 <span class="kpi-val">{cur_power:.1f}</span>
@@ -285,7 +330,7 @@ with kpi_c2:
 with kpi_c3:
     st.markdown(
         f"""
-        <div class="kpi-card-velora">
+        <div class="kpi-card-velora" style="height:100%;">
             <div class="kpi-label">Estimasi Biaya Listrik (Grid)</div>
             <div>
                 <span class="kpi-val">{format_id_currency(cost_rp)}</span>
@@ -301,8 +346,9 @@ with kpi_c3:
 
 st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
 
+
 # ---------------------------------------------------------------------------
-# Baris Tengah: Energy Overview Multi-Line Spline Chart & Power Radial Gauge
+# Baris Tengah: Energy Overview Line Chart & Power Radial Gauge
 # ---------------------------------------------------------------------------
 col_mid_left, col_mid_right = st.columns([1.8, 1.05])
 
@@ -313,7 +359,7 @@ with col_mid_left:
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <div>
                     <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Energy Overview</h3>
-                    <div style="font-size:12px; color:#6B6259; font-weight:600;">Kurva beban daya instan seluruh mesin per jam (WIB)</div>
+                    <div style="font-size:12px; color:#6B6259; font-weight:600;">Daya total seluruh lini mesin (kW)</div>
                 </div>
                 <div style="display:flex; gap:16px; font-size:12px; font-weight:700;">
                     <span style="display:flex; align-items:center; gap:5px; color:#E8590C;">
@@ -331,37 +377,40 @@ with col_mid_left:
         if view_granularity == "Hourly":
             df_chart = hourly_total
             x_vals = df_chart["hour_wib"]
+            y_vals = df_chart["power_kw"]
         else:
+            # Agregasi Harian: Rata-rata daya per jam di hari tersebut
             df_chart = (
-                df_readings.groupby("date_wib", as_index=False)
-                .agg({"power_kw": "sum", "energy_kwh": "sum"})
+                hourly_total.assign(date_wib=hourly_total["hour_wib"].dt.date)
+                .groupby("date_wib", as_index=False)["power_kw"]
+                .mean()
                 .sort_values("date_wib")
             )
             x_vals = df_chart["date_wib"]
+            y_vals = df_chart["power_kw"]
 
         fig_multi = go.Figure()
 
-        # Satu garis daya total per jam (kW)
+        # Satu garis daya total pabrik (kW)
         fig_multi.add_trace(
             go.Scatter(
                 x=x_vals,
-                y=df_chart["power_kw"],
+                y=y_vals,
                 mode="lines",
                 name="Daya Total (kW)",
-                line=dict(color="#E8590C", width=3, shape="spline"),
+                line=dict(color="#E8590C", width=2.5, shape="spline"),
                 fill="tozeroy",
-                fillcolor="rgba(232, 89, 12, 0.06)",
-                hovertemplate="<b>Waktu (WIB)</b>: %{x}<br>Daya Total: <b>%{y:.2f} kW</b><extra></extra>",
+                fillcolor="rgba(232, 89, 12, 0.05)",
+                hovertemplate="<b>%{x|%d %b %Y, %H:00 WIB}</b><br>Daya Total: <b>%{y:.2f} kW</b><extra></extra>",
             )
         )
 
-        style_plotly_fig(fig_multi, height=330)
+        style_plotly_fig(fig_multi, height=310)
         fig_multi.update_layout(
-            showlegend=False,
             margin=dict(l=20, r=20, t=10, b=30),
             hovermode="x unified",
         )
-        st.plotly_chart(fig_multi, use_container_width=True)
+        st.plotly_chart(fig_multi, use_container_width=True, config={"displayModeBar": False})
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -376,7 +425,7 @@ with col_mid_right:
         <div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:20px 22px; box-shadow:0 2px 10px -2px rgba(31,26,23,0.04); height:100%;">
             <div style="font-weight:800; font-size:1.15rem; color:#1F1A17; margin-bottom:4px;">Power Meter</div>
             <div style="font-size:12px; color:#6B6259; font-weight:600; margin-bottom:2px;">
-                Total Daya Semua Mesin (Kapasitas: {total_rated_kw:.0f} kW)
+                Total Daya Seluruh Mesin (Kapasitas: {total_rated_kw:.1f} kW)
             </div>
             <div style="font-size:11px; color:#8C827A; margin-bottom:6px;">
                 Jam terakhir data: {last_hour_str}
@@ -385,7 +434,7 @@ with col_mid_right:
         unsafe_allow_html=True,
     )
 
-    # Dial Radial Gauge: Skala 0 sampai total rated_power_kw semua mesin
+    # Dial Radial Gauge: Skala 0 sampai total rated_power_kw semua mesin (466 kW)
     gauge_fig = go.Figure(
         go.Indicator(
             mode="gauge+number",
@@ -420,10 +469,10 @@ with col_mid_right:
     gauge_fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=220,
-        margin=dict(l=15, r=15, t=30, b=10),
+        height=210,
+        margin=dict(l=15, r=15, t=25, b=10),
     )
-    st.plotly_chart(gauge_fig, use_container_width=True)
+    st.plotly_chart(gauge_fig, use_container_width=True, config={"displayModeBar": False})
 
     # Min / Max / Avg bar dihitung dari deret TOTAL daya semua mesin per jam
     st.markdown(
@@ -431,17 +480,17 @@ with col_mid_right:
         <div style="display:flex; justify-content:space-around; text-align:center; padding:8px 0; border-top:1px solid #EFE5D6; margin-top:-10px; margin-bottom:14px;">
             <div>
                 <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Min</div>
-                <div style="font-size:14px; font-weight:700; color:#1F1A17;">{min_power:.2f} <span style="font-size:12px;">kW</span></div>
+                <div style="font-size:14px; font-weight:700; color:#1F1A17;">{min_power:.1f} <span style="font-size:12px;">kW</span></div>
             </div>
             <div style="border-right:1px solid #EFE5D6;"></div>
             <div>
                 <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Max</div>
-                <div style="font-size:14px; font-weight:700; color:#E8590C;">{max_power:.2f} <span style="font-size:12px;">kW</span></div>
+                <div style="font-size:14px; font-weight:700; color:#E8590C;">{max_power:.1f} <span style="font-size:12px;">kW</span></div>
             </div>
             <div style="border-right:1px solid #EFE5D6;"></div>
             <div>
                 <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Rata-rata</div>
-                <div style="font-size:14px; font-weight:700; color:#1F1A17;">{avg_power:.2f} <span style="font-size:12px;">kW</span></div>
+                <div style="font-size:14px; font-weight:700; color:#1F1A17;">{avg_power:.1f} <span style="font-size:12px;">kW</span></div>
             </div>
         </div>
 
@@ -472,16 +521,15 @@ with col_mid_right:
 
 st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
 
+
 # ---------------------------------------------------------------------------
-# Baris Bawah: 3 Kolom (Alerts per Tipe, Impact Operasional, Peta Beban Mesin)
+# Baris Bawah: 3 Kolom (Alerts per Tipe, Ringkasan Operasional, Peta Beban Mesin)
 # ---------------------------------------------------------------------------
 b_c1, b_c2, b_c3 = st.columns([1.05, 1.15, 1.6])
 
 with b_c1:
     mock_badge_html = '<span class="badge-mock">Data contoh</span>' if has_mock_alert else ""
 
-    # Bangun string HTML tanpa indentasi di awal baris dan tanpa baris kosong
-    # agar tidak dianggap oleh parser Markdown sebagai blok kode (4-space indented code block)
     rows_parts = []
     if alert_type_counts:
         for atype, count in sorted(alert_type_counts.items(), key=lambda x: -x[1]):
@@ -501,7 +549,7 @@ with b_c1:
 
     alert_rows_html = "".join(rows_parts)
     alerts_card_html = "".join([
-        '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%;">',
+        '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%; min-height:290px;">',
         '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">',
         f'<div style="font-weight:700; font-size:14px; color:#1F1A17;">Peringatan Pemborosan {mock_badge_html}</div>',
         f'<span class="badge-pill-orange">{total_waste_alerts} Kasus</span>',
@@ -516,7 +564,7 @@ with b_c1:
 with b_c2:
     st.markdown(
         f"""
-        <div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%;">
+        <div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%; min-height:290px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <div style="font-weight:700; font-size:14px; color:#1F1A17;">Ringkasan Operasional</div>
                 <span class="badge-pill-green">Aktif</span>
@@ -530,9 +578,13 @@ with b_c2:
                     <span style="color:#6B6259;">Jumlah Mesin Terdaftar</span>
                     <span style="font-weight:700; color:#1F1A17;">{len(machines)} Mesin</span>
                 </div>
+                <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
+                    <span style="color:#6B6259;">Total Kapasitas Terpasang</span>
+                    <span style="font-weight:700; color:#1F1A17;">{total_rated_kw:.1f} kW</span>
+                </div>
                 <div style="display:flex; justify-content:space-between; font-size:13px;">
-                    <span style="color:#6B6259;">Total Konsumsi Energi</span>
-                    <span style="font-weight:700; color:#1F1A17;">{format_id_num(total_kwh, 2)} kWh</span>
+                    <span style="color:#6B6259;">Total Konsumsi 7 Hari</span>
+                    <span style="font-weight:700; color:#1F1A17;">{format_id_num(total_kwh, 1)} kWh</span>
                 </div>
             </div>
         </div>
@@ -543,9 +595,9 @@ with b_c2:
 with b_c3:
     st.markdown(
         """
-        <div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%;">
+        <div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%; min-height:290px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <div style="font-weight:700; font-size:14px; color:#1F1A17;">Peta Beban Mesin</div>
+                <div style="font-weight:700; font-size:14px; color:#1F1A17;">Peta Beban Mesin (Heatmap)</div>
                 <span style="font-size:12px; color:#6B6259; font-weight:600;">Jam 00–23 (WIB)</span>
             </div>
         """,
@@ -556,7 +608,6 @@ with b_c3:
         st.info("Data pembacaan sensor belum tersedia.")
     else:
         df_readings["hour_num"] = df_readings["timestamp_wib"].dt.hour
-        # Urutkan baris mesin dari atas ke bawah (M01 di atas)
         sorted_machines = sorted(machines, key=lambda m: m.get("machine_id", ""))
         machine_ids = [m["machine_id"] for m in sorted_machines]
         hours_labels = [f"{h:02d}" for h in range(24)]
@@ -592,49 +643,30 @@ with b_c3:
                     [1.0, "#E8590C"],
                 ],
                 colorbar=dict(
-                    title=dict(text="Beban", font=dict(size=12, color="#6B6259")),
+                    title=dict(text="Beban", font=dict(size=11, color="#6B6259")),
                     tickformat=".0%",
-                    tickfont=dict(size=12, color="#6B6259"),
+                    tickfont=dict(size=11, color="#6B6259"),
                     len=0.9,
-                    thickness=12,
+                    thickness=10,
                 ),
                 hovertemplate="<b>Mesin %{y}</b><br>Jam: %{x}:00 WIB<br>Rasio Beban: <b>%{z:.1%}</b><extra></extra>",
             )
         )
         fig_heatmap.update_xaxes(
             title_text="Jam WIB",
-            tickfont=dict(size=12, color="#6B6259"),
-            title_font=dict(size=12, color="#6B6259"),
+            tickfont=dict(size=11, color="#6B6259"),
+            title_font=dict(size=11, color="#6B6259"),
         )
         fig_heatmap.update_yaxes(
             autorange="reversed",
-            tickfont=dict(size=12, color="#6B6259"),
+            tickmode="linear",
+            dtick=1,
+            tickfont=dict(size=10, color="#6B6259"),
         )
-        style_plotly_fig(fig_heatmap, height=195)
+        style_plotly_fig(fig_heatmap, height=275)
         fig_heatmap.update_layout(
             margin=dict(l=10, r=10, t=10, b=25),
         )
-        st.plotly_chart(fig_heatmap, use_container_width=True)
-
-        st.markdown(
-            """
-            <div style="font-size:12px; color:#6B6259; margin-top:2px; text-align:center;">
-                Keterangan Skala: Kuning pucat = Beban Rendah/Idle (0%) ➔ Oranye Pekat = Beban Tinggi (≥100%)
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.plotly_chart(fig_heatmap, use_container_width=True, config={"displayModeBar": False})
 
     st.markdown("</div>", unsafe_allow_html=True)
-
-# Footer info
-st.markdown(
-    f"""
-    <div style="text-align: right; font-size: 12px; color: #6B6259; margin-top: 20px;">
-        Database Sensor: Data aktif <b>{start_dt.strftime('%d %b %Y')}</b> s/d <b>{end_dt.strftime('%d %b %Y')}</b> (Rentang Server) · Ditampilkan dalam Waktu Indonesia Barat (WIB)
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-

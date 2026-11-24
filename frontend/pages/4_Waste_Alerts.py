@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 import io
 
@@ -36,8 +36,8 @@ UTC_TZ = ZoneInfo("UTC")
 # Helper: Badge severity → HTML pill
 # ---------------------------------------------------------------------------
 SEVERITY_BADGE = {
-    "low":    '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(22,163,74,0.10);color:#16A34A;border-radius:20px;padding:3px 10px;font-size:0.75rem;font-weight:700;">Low</span>',
-    "medium": '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(242,194,48,0.15);color:#A07A00;border-radius:20px;padding:3px 10px;font-size:0.75rem;font-weight:700;">Medium</span>',
+    "low":    '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(22,163,74,0.12);color:#16A34A;border-radius:20px;padding:3px 10px;font-size:0.75rem;font-weight:700;">Low</span>',
+    "medium": '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(242,194,48,0.18);color:#A07A00;border-radius:20px;padding:3px 10px;font-size:0.75rem;font-weight:700;">Medium</span>',
     "high":   '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(232,89,12,0.12);color:#E8590C;border-radius:20px;padding:3px 10px;font-size:0.75rem;font-weight:700;">High</span>',
 }
 SEVERITY_COLOR = {"low": "#16A34A", "medium": "#F2C230", "high": "#E8590C"}
@@ -84,25 +84,20 @@ st.markdown(
 
 
 # ---------------------------------------------------------------------------
-# 2. Filter: Mesin, Severity, Rentang Tanggal (WIB)
+# 2. Filter: Mesin, Severity, Rentang Tanggal (Default 7 Hari Terakhir WIB)
 # ---------------------------------------------------------------------------
 try:
     s_dt_raw, e_dt_raw = get_data_range()
-    # Konversi data range ke WIB
-    if s_dt_raw.tzinfo is None:
-        s_dt_wib = s_dt_raw.replace(tzinfo=UTC_TZ).astimezone(WIB_TZ)
-    else:
-        s_dt_wib = s_dt_raw.astimezone(WIB_TZ)
     if e_dt_raw.tzinfo is None:
         e_dt_wib = e_dt_raw.replace(tzinfo=UTC_TZ).astimezone(WIB_TZ)
     else:
         e_dt_wib = e_dt_raw.astimezone(WIB_TZ)
 
-    default_start_date = s_dt_wib.date()
     default_end_date = e_dt_wib.date()
+    default_start_date = default_end_date - timedelta(days=6)
 except Exception:
-    default_start_date = datetime(2026, 11, 1).date()
-    default_end_date = datetime(2026, 11, 4).date()
+    default_start_date = datetime(2026, 6, 24).date()
+    default_end_date = datetime(2026, 6, 30).date()
 
 f_c1, f_c2, f_c3 = st.columns([1.4, 1.1, 1.8])
 
@@ -135,7 +130,7 @@ if not isinstance(date_range, (list, tuple)) or len(date_range) != 2:
 
 sel_d_start, sel_d_end = date_range[0], date_range[1]
 
-# Konversi rentang tanggal WIB ke rentang UTC untuk pemanggilan backend API
+# Konversi rentang tanggal WIB ke rentang UTC untuk query backend API
 wib_start = datetime.combine(sel_d_start, time.min, tzinfo=WIB_TZ)
 wib_end   = datetime.combine(sel_d_end, time.max.replace(microsecond=0), tzinfo=WIB_TZ)
 utc_start = wib_start.astimezone(UTC_TZ).replace(tzinfo=None)
@@ -229,7 +224,7 @@ if df_alerts.empty:
 
 
 # ---------------------------------------------------------------------------
-# 4. KPI Strip Ringkas
+# 4. KPI Strip Ringkas (Tinggi Kartu Seragam)
 # ---------------------------------------------------------------------------
 total_alerts = len(df_alerts)
 
@@ -243,9 +238,9 @@ k1, k2, k3, k4 = st.columns(4)
 with k1:
     st.markdown(
         "".join([
-            '<div class="kpi-card-velora">',
+            '<div class="kpi-card-velora" style="height:100%;">',
             '<div class="kpi-label">Total Kasus Terdeteksi</div>',
-            f'<div><span class="kpi-val">{total_alerts}</span><span class="kpi-unit">Kasus</span></div>',
+            f'<div><span class="kpi-val">{total_alerts:,}</span><span class="kpi-unit">Kasus</span></div>',
             f'<div class="kpi-sub">{kpi_sub_total}</div>',
             '</div>',
         ]),
@@ -262,7 +257,7 @@ with k2:
 
     st.markdown(
         "".join([
-            '<div class="kpi-card-velora">',
+            '<div class="kpi-card-velora" style="height:100%;">',
             '<div class="kpi-label">Severity Tertinggi</div>',
             f'<div><span class="kpi-val" style="color:{max_sev_color};">{max_sev_str}</span></div>',
             '<div class="kpi-sub"><span style="color:#6B6259; font-size:12px; font-weight:600;">Status Risiko</span></div>',
@@ -273,17 +268,17 @@ with k2:
 
 with k3:
     if not df_alerts.empty:
-        top_mach = df_alerts["machine_id"].value_index = df_alerts["machine_id"].value_counts().index[0]
+        top_mach = df_alerts["machine_id"].value_counts().index[0]
         top_mach_count = int(df_alerts["machine_id"].value_counts().iloc[0])
     else:
         top_mach, top_mach_count = "—", 0
 
     st.markdown(
         "".join([
-            '<div class="kpi-card-velora">',
+            '<div class="kpi-card-velora" style="height:100%;">',
             '<div class="kpi-label">Mesin Paling Boros</div>',
             f'<div><span class="kpi-val">{top_mach}</span></div>',
-            f'<div class="kpi-sub"><span class="badge-pill-orange">{top_mach_count} Kejadian</span></div>',
+            f'<div class="kpi-sub"><span class="badge-pill-orange">{top_mach_count:,} Kejadian</span></div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
@@ -295,14 +290,14 @@ with k4:
     low_count  = int((df_alerts["severity"] == "low").sum())
     st.markdown(
         "".join([
-            '<div class="kpi-card-velora">',
+            '<div class="kpi-card-velora" style="height:100%;">',
             '<div class="kpi-label">Sebaran Severity</div>',
             '<div style="display:flex;gap:10px;align-items:center;margin:6px 0;">',
-            f'<span style="font-size:12px;color:#E8590C;font-weight:700;">High {high_count}</span>',
-            f'<span style="font-size:12px;color:#A07A00;font-weight:700;">Medium {med_count}</span>',
-            f'<span style="font-size:12px;color:#16A34A;font-weight:700;">Low {low_count}</span>',
+            f'<span style="font-size:12px;color:#E8590C;font-weight:700;">High {high_count:,}</span>',
+            f'<span style="font-size:12px;color:#A07A00;font-weight:700;">Medium {med_count:,}</span>',
+            f'<span style="font-size:12px;color:#16A34A;font-weight:700;">Low {low_count:,}</span>',
             '</div>',
-            f'<div class="kpi-sub" style="color:#6B6259;font-size:12px;">dari {total_alerts} total kasus</div>',
+            f'<div class="kpi-sub" style="color:#6B6259;font-size:12px;">dari {total_alerts:,} total kasus</div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
@@ -312,14 +307,14 @@ st.markdown("<div style='margin:1.2rem 0;'></div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# 5. Tabel Alert + Tombol Download CSV
+# 5. Tabel Alert HTML (Max 100 Baris) + Tombol Download CSV (Full Data)
 # ---------------------------------------------------------------------------
 tbl_hdr, tbl_btn = st.columns([3, 1])
 with tbl_hdr:
     st.markdown(
         "".join([
             '<div style="font-weight:800; font-size:1.1rem; color:#1F1A17; margin-bottom:4px;">Daftar Peringatan Pemborosan</div>',
-            '<div style="font-size:0.75rem; color:#6B6259; font-weight:600;">Waktu dalam WIB · Data tersortir dari yang terbaru</div>',
+            '<div style="font-size:0.75rem; color:#6B6259; font-weight:600;">Waktu dalam WIB · Menampilkan hingga 100 anomali terbaru · Teks rekomendasi penuh</div>',
         ]),
         unsafe_allow_html=True,
     )
@@ -330,7 +325,7 @@ with tbl_btn:
     export_df["timestamp_wib"] = export_df["timestamp_wib"].dt.strftime("%Y-%m-%d %H:%M WIB")
     export_df.to_csv(csv_buf, index=False)
     st.download_button(
-        label="⬇ Unduh CSV",
+        label="⬇ Unduh Semua CSV",
         data=csv_buf.getvalue(),
         file_name=f"waste_alerts_{sel_d_start}_{sel_d_end}.csv",
         mime="text/csv",
@@ -339,32 +334,62 @@ with tbl_btn:
 
 st.markdown("<div style='margin:8px 0;'></div>", unsafe_allow_html=True)
 
-# Urutkan secara kronologis terbalik (paling baru di atas) sebelum diformat
+# Urutkan kronologis terbalik (terbaru di atas)
 df_table = df_alerts[["timestamp_wib", "machine_id", "type", "severity", "note"]].copy()
 df_table = df_table.sort_values("timestamp_wib", ascending=False).reset_index(drop=True)
+df_table["timestamp_wib_str"] = df_table["timestamp_wib"].dt.strftime("%d %b %Y, %H:%M WIB")
+df_table["type_title"] = df_table["type"].str.replace("_", " ").str.title()
+df_table["note_clean"] = df_table["note"].fillna("—").replace("", "—")
 
-df_table["Waktu (WIB)"] = df_table["timestamp_wib"].dt.strftime("%d %b %Y, %H:%M WIB")
-df_table["Tipe Anomali"] = df_table["type"].str.replace("_", " ").str.title()
-df_table["Severity"] = df_table["severity"].str.capitalize()
-df_table["Rekomendasi / Catatan"] = df_table["note"].fillna("—").replace("", "—")
+# Ambil maksimal 100 baris terbaru untuk render tabel HTML yang cepat dan responsif
+display_rows = df_table.head(100)
 
-df_display = df_table[["Waktu (WIB)", "machine_id", "Tipe Anomali", "Severity", "Rekomendasi / Catatan"]].rename(
-    columns={"machine_id": "Mesin"}
-)
+SEV_PILL = {
+    "high": '<span style="display:inline-block; padding:3px 10px; border-radius:12px; font-weight:700; font-size:12px; background:rgba(232,89,12,0.12); color:#E8590C;">High</span>',
+    "medium": '<span style="display:inline-block; padding:3px 10px; border-radius:12px; font-weight:700; font-size:12px; background:rgba(242,194,48,0.18); color:#A07A00;">Medium</span>',
+    "low": '<span style="display:inline-block; padding:3px 10px; border-radius:12px; font-weight:700; font-size:12px; background:rgba(22,163,74,0.12); color:#16A34A;">Low</span>',
+}
 
-# Render tabel interaktif dengan lebar kolom Rekomendasi lebar agar teks tidak terpotong
-st.dataframe(
-    df_display,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Waktu (WIB)": st.column_config.TextColumn("Waktu (WIB)", width="medium"),
-        "Mesin": st.column_config.TextColumn("Mesin", width="small"),
-        "Tipe Anomali": st.column_config.TextColumn("Tipe Pemborosan", width="medium"),
-        "Severity": st.column_config.TextColumn("Tingkat Keparahan", width="small"),
-        "Rekomendasi / Catatan": st.column_config.TextColumn("Rekomendasi Tindakan", width="large"),
-    },
-)
+tbody_parts = []
+for idx, row in display_rows.iterrows():
+    sev_key = str(row["severity"]).lower()
+    pill = SEV_PILL.get(sev_key, f'<span style="font-weight:700;">{row["severity"]}</span>')
+    bg_row = "#FFFFFF" if idx % 2 == 0 else "#FAF7F2"
+    tbody_parts.append(
+        f'<tr style="background:{bg_row}; border-bottom:1px solid #EFE5D6;">'
+        f'<td style="padding:10px 14px; white-space:nowrap; font-weight:600; color:#1F1A17; vertical-align:top;">{row["timestamp_wib_str"]}</td>'
+        f'<td style="padding:10px 12px; font-weight:700; color:#E8590C; vertical-align:top;">{row["machine_id"]}</td>'
+        f'<td style="padding:10px 14px; color:#1F1A17; font-weight:600; vertical-align:top; white-space:nowrap;">{row["type_title"]}</td>'
+        f'<td style="padding:10px 12px; vertical-align:top;">{pill}</td>'
+        f'<td style="padding:10px 16px; color:#4A4036; line-height:1.45; word-break:break-word; vertical-align:top;">{row["note_clean"]}</td>'
+        f'</tr>'
+    )
+
+tbody_html = "".join(tbody_parts)
+table_html = "".join([
+    '<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.03);">',
+    '<div style="overflow-x:auto;">',
+    '<table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">',
+    '<thead>',
+    '<tr style="background:#FAF4E8; border-bottom:1.5px solid #EAE0D0; color:#6B6259; font-size:12px; text-transform:uppercase; letter-spacing:0.04em;">',
+    '<th style="padding:12px 14px; width:170px;">Waktu (WIB)</th>',
+    '<th style="padding:12px 12px; width:75px;">Mesin</th>',
+    '<th style="padding:12px 14px; width:190px;">Tipe Pemborosan</th>',
+    '<th style="padding:12px 12px; width:110px;">Severity</th>',
+    '<th style="padding:12px 16px;">Rekomendasi Tindakan</th>',
+    '</tr>',
+    '</thead>',
+    '<tbody>',
+    tbody_html,
+    '</tbody>',
+    '</table>',
+    '</div>',
+    '</div>',
+])
+st.markdown(table_html, unsafe_allow_html=True)
+
+if len(df_table) > 100:
+    st.caption(f"Menampilkan 100 dari total {len(df_table):,} kasus terbaru. Gunakan tombol 'Unduh Semua CSV' di atas untuk mengunduh seluruh {len(df_table):,} data terfilter.")
 
 st.markdown("<div style='margin:1.4rem 0;'></div>", unsafe_allow_html=True)
 
@@ -400,17 +425,17 @@ with vis_c1:
             ),
             text=mach_counts["count"],
             textposition="outside",
-            textfont=dict(size=12, color="#1F1A17", family="Plus Jakarta Sans"),
-            hovertemplate="<b>Mesin %{y}</b><br>Total Alert: %{x} kasus<extra></extra>",
+            textfont=dict(size=11, color="#1F1A17", family="Plus Jakarta Sans"),
+            hovertemplate="<b>Mesin %{y}</b><br>Total Alert: %{x:,} kasus<extra></extra>",
         )
     )
-    style_plotly_fig(fig_bar, height=220)
+    style_plotly_fig(fig_bar, height=270)
     fig_bar.update_layout(
-        margin=dict(l=10, r=30, t=10, b=10),
+        margin=dict(l=10, r=35, t=10, b=10),
         xaxis=dict(title="Jumlah Kasus", showgrid=True, zeroline=False),
-        yaxis=dict(title="", tickfont=dict(size=12, color="#1F1A17")),
+        yaxis=dict(title="", tickfont=dict(size=11, color="#1F1A17"), dtick=1),
     )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
     st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Bubble Chart: Jam WIB vs Jumlah Alert ---
@@ -440,16 +465,16 @@ with vis_c2:
             mode="markers+lines",
             line=dict(color="rgba(232, 89, 12, 0.3)", width=1.5, dash="dot"),
             marker=dict(
-                size=hourly_grp["count"].apply(lambda c: max(8, min(36, c * 6))),
+                size=hourly_grp["count"].apply(lambda c: max(8, min(36, 8 + c * 0.4))),
                 color=hourly_grp["avg_sev"],
                 colorscale=[[0.0, "#16A34A"], [0.5, "#F2C230"], [1.0, "#E8590C"]],
                 showscale=False,
                 line=dict(color="#FFFFFF", width=1.5),
             ),
-            hovertemplate="<b>Jam %{x:02d}:00 WIB</b><br>Jumlah Alert: %{y}<br>Avg Severity: %{marker.color:.1f}/3<extra></extra>",
+            hovertemplate="<b>Jam %{x:02d}:00 WIB</b><br>Jumlah Alert: %{y:,}<br>Avg Severity: %{marker.color:.1f}/3<extra></extra>",
         )
     )
-    style_plotly_fig(fig_bubble, height=220)
+    style_plotly_fig(fig_bubble, height=270)
     fig_bubble.update_layout(
         margin=dict(l=10, r=10, t=10, b=25),
         xaxis=dict(
@@ -461,7 +486,7 @@ with vis_c2:
         ),
         yaxis=dict(title="Jumlah Kasus", showgrid=True),
     )
-    st.plotly_chart(fig_bubble, use_container_width=True)
+    st.plotly_chart(fig_bubble, use_container_width=True, config={"displayModeBar": False})
     st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("<div style='margin:1.4rem 0;'></div>", unsafe_allow_html=True)
@@ -518,7 +543,7 @@ for i, atype in enumerate(all_types):
                 f'<div style="background:#FFFFFF; border:1px solid #EFE5D6; border-top:3px solid {meta["border_color"]}; border-radius:16px; padding:16px 18px; box-shadow:0 2px 8px rgba(0,0,0,0.03); height:100%;">',
                 f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">',
                 f'<span style="font-size:1.4rem;">{meta["icon"]}</span>',
-                f'<span class="badge-pill-orange">{cnt} Kasus</span>',
+                f'<span class="badge-pill-orange">{cnt:,} Kasus</span>',
                 '</div>',
                 f'<div style="font-weight:700; font-size:0.92rem; color:#1F1A17; margin-bottom:6px;">{meta["title"]}</div>',
                 f'<div style="font-size:0.75rem; color:#6B6259; line-height:1.4; margin-bottom:12px;">{meta["desc"]}</div>',

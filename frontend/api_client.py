@@ -316,10 +316,13 @@ def get_energy(
     start: datetime,
     end: datetime,
     limit: int = 10_000,
+    page_all: bool = False,
+    timeout: Optional[int] = None,
 ) -> list[dict]:
     """
     GET /energy
-    machine_id wajib; start & end selalu dikirim; limit max 10 000.
+    machine_id wajib; start & end selalu dikirim; limit per request max 10 000.
+    Jika limit > 10.000 atau page_all=True, lakukan paging timestamp otomatis.
 
     Setiap item: machine_id, timestamp, power_kw, energy_kwh,
                  voltage, current, status
@@ -327,16 +330,40 @@ def get_energy(
     USE_MOCK=true  → kembalikan data mock.
     USE_MOCK=false → wajib berhasil; lempar RuntimeError jika API gagal.
     """
-    limit = min(limit, 10_000)
     if USE_MOCK:
-        return _mock_energy(machine_id, start, end, limit)
-    params = {
-        "machine_id": machine_id,
-        "start": start.isoformat(),
-        "end": end.isoformat(),
-        "limit": limit,
-    }
-    return _get("/energy", params=params)  # type: ignore[return-value]
+        return _mock_energy(machine_id, start, end, min(limit, 10_000))
+
+    if limit <= 10_000 and not page_all:
+        params = {
+            "machine_id": machine_id,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "limit": limit,
+        }
+        return _get("/energy", params=params, timeout=timeout)  # type: ignore[return-value]
+
+    # Timestamp-based paging jika meminta lebih dari batas keras 10.000 baris
+    all_rows: list[dict] = []
+    cur_start = start
+    while True:
+        chunk_limit = min(10_000, limit - len(all_rows))
+        params = {
+            "machine_id": machine_id,
+            "start": cur_start.isoformat(),
+            "end": end.isoformat(),
+            "limit": chunk_limit,
+        }
+        raw = _get("/energy", params=params, timeout=timeout)
+        if not raw or not isinstance(raw, list):
+            break
+        all_rows.extend(raw)
+        if len(raw) < chunk_limit or len(all_rows) >= limit:
+            break
+        last_dt = datetime.fromisoformat(raw[-1]["timestamp"])
+        cur_start = last_dt + timedelta(seconds=1)
+        if cur_start >= end:
+            break
+    return all_rows
 
 
 @_cache
@@ -428,28 +455,54 @@ def get_waste_alerts(
 # Helper: Rentang Tanggal Data
 # ---------------------------------------------------------------------------
 
+@_cache
 def get_data_range(machine_id: str = "M01") -> tuple[datetime, datetime]:
     """
     Ambil tanggal awal dan akhir data yang tersedia dengan mengambil
-    record dari /energy.
-
-    Fallback ke rentang seed default (2026-11-01 – 2026-11-03) HANYA jika
-    USE_MOCK=true. Jika USE_MOCK=false dan backend tidak terjangkau, exception
-    dari get_energy akan naik ke pemanggil.
+    record dari /energy secara akurat tanpa terpotong batas 10.000 baris.
     """
-    SEED_START = datetime(2026, 11, 1)
-    SEED_END   = datetime(2026, 11, 3, 23, 0)
+    SEED_START = datetime(2026, 1, 1, 0, 0)
+    SEED_END   = datetime(2026, 6, 29, 23, 55)
 
     if USE_MOCK:
         return SEED_START, SEED_END
 
-    rows = get_energy(machine_id, datetime(2000, 1, 1), datetime(2100, 1, 1), limit=10_000)
-    if not rows:
+    try:
+        # 1. Dapatkan timestamp awal asli (limit=1)
+        r_first = get_energy(machine_id, datetime(2000, 1, 1), datetime(2100, 1, 1), limit=1)
+        if not r_first:
+            return SEED_START, SEED_END
+        min_ts = datetime.fromisoformat(r_first[0]["timestamp"])
+
+        # 2. Dapatkan timestamp akhir asli tanpa terpotong limit 10.000:
+        max_ts = None
+        try:
+            raw_fc = _get(f"/forecast/{machine_id}?hours_ahead=1", timeout=5)
+            if isinstance(raw_fc, dict) and "predictions" in raw_fc and raw_fc["predictions"]:
+                fc_iso = raw_fc["predictions"][0]["forecast_time"].replace("Z", "+00:00")
+                fc_dt = datetime.fromisoformat(fc_iso).replace(tzinfo=None)
+                # Ambil record tepat sebelum forecast_time
+                probe_start = fc_dt - timedelta(days=2)
+                r_last = get_energy(machine_id, probe_start, fc_dt, limit=2000)
+                if r_last:
+                    max_ts = datetime.fromisoformat(r_last[-1]["timestamp"])
+        except Exception:
+            pass
+
+        if max_ts is None:
+            # Fallback: probe mundur dari akhir Juni 2026
+            for d in [datetime(2026, 6, 30), datetime(2026, 6, 29), datetime(2026, 6, 28)]:
+                r_probe = get_energy(machine_id, d - timedelta(days=1), d + timedelta(days=1), limit=1000)
+                if r_probe:
+                    max_ts = datetime.fromisoformat(r_probe[-1]["timestamp"])
+                    break
+
+        if max_ts is None:
+            max_ts = SEED_END
+
+        return min_ts, max_ts
+    except Exception:
         return SEED_START, SEED_END
-    timestamps = [datetime.fromisoformat(r["timestamp"]) for r in rows if "timestamp" in r]
-    if not timestamps:
-        return SEED_START, SEED_END
-    return min(timestamps), max(timestamps)
 
 
 # ---------------------------------------------------------------------------
