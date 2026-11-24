@@ -21,11 +21,15 @@ except ImportError:
     from api_client import get_machines, get_waste_alerts, get_data_range
     from ui import apply_theme, style_plotly_fig
 
-st.set_page_config(
-    page_title="Waste Alerts - Smart Factory Energy Management",
-    page_icon="⚡",
-    layout="wide",
-)
+try:
+    st.set_page_config(
+        page_title="Waste Alerts - Smart Factory Energy Management",
+        page_icon="⚡",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+except Exception:
+    pass
 
 apply_theme()
 

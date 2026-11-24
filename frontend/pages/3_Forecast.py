@@ -42,11 +42,15 @@ except ImportError:
 if hasattr(ac, "TIMEOUT"):
     ac.TIMEOUT = 45
 
-st.set_page_config(
-    page_title="Forecast - Smart Factory Energy Management",
-    page_icon="⚡",
-    layout="wide",
-)
+try:
+    st.set_page_config(
+        page_title="Forecast - Smart Factory Energy Management",
+        page_icon="⚡",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+except Exception:
+    pass
 
 # Terapkan Tema Warm Light
 apply_theme()

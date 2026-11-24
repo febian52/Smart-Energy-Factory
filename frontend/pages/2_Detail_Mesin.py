@@ -36,11 +36,15 @@ except ImportError:
         style_plotly_fig,
     )
 
-st.set_page_config(
-    page_title="Detail Mesin - Smart Factory Energy Management",
-    page_icon="⚡",
-    layout="wide",
-)
+try:
+    st.set_page_config(
+        page_title="Detail Mesin - Smart Factory Energy Management",
+        page_icon="⚡",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+except Exception:
+    pass
 
 apply_theme()
 

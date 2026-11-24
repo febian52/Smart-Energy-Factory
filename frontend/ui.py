@@ -35,10 +35,41 @@ CUSTOM_CSS = """
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Sembunyikan toolbar deploy Streamlit yang mengganggu */
-    .stDeployButton, [data-testid="stToolbar"], footer, #MainMenu {
+    /* Sembunyikan tombol deploy dan footer bawaan */
+    .stDeployButton, footer, #MainMenu {
         display: none !important;
         visibility: hidden !important;
+    }
+
+    /* Header & Kontrol Buka/Tutup Sidebar */
+    [data-testid="stHeader"] {
+        background-color: transparent !important;
+        z-index: 100 !important;
+    }
+
+    /* Pastikan tombol buka sidebar (panah kiri atas) dan tombol collapse SELALU terlihat */
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 1000 !important;
+        color: #1F1A17 !important;
+    }
+
+    [data-testid="stSidebarCollapsedControl"] button,
+    [data-testid="stSidebarCollapseButton"] button {
+        color: #1F1A17 !important;
+        background-color: #FAF6EF !important;
+        border: 1px solid #EFE5D6 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    [data-testid="stSidebarCollapsedControl"] svg,
+    [data-testid="stSidebarCollapseButton"] svg {
+        fill: #1F1A17 !important;
+        color: #1F1A17 !important;
     }
 
     /* Background Utama: gradien putih ke krem hangat sangat lembut */
@@ -352,20 +383,7 @@ CUSTOM_CSS = """
         line-height: 1.4 !important;
     }
 
-    /* ---- Fallback Ganti Nama 'app' -> 'Beranda' di Sidebar Navigasi ---- */
-    [data-testid="stSidebarNav"] li:first-child a span {
-        display: none !important;
-    }
-    [data-testid="stSidebarNav"] li:first-child a::after {
-        content: "Beranda";
-        font-size: 0.9rem;
-        font-weight: 500;
-        color: #6B6259;
-    }
-    [data-testid="stSidebarNav"] li:first-child a[aria-current="page"]::after {
-        color: #E8590C !important;
-        font-weight: 700;
-    }
+
 </style>
 """
 
