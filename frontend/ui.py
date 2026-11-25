@@ -595,13 +595,14 @@ def create_type_donut(type_counts: Dict[str, int], height: int = 260) -> go.Figu
     labels = [k.replace("_", " ").title() for k in type_counts.keys()]
     values = list(type_counts.values())
     colors = ["#1D6FF2", "#F59E0B", "#6366F1", "#10B981", "#EC4899", "#8B5CF6"]
+    slice_colors = [colors[i % len(colors)] for i in range(len(labels))]
 
     fig = go.Figure(
         go.Pie(
             labels=labels,
             values=values,
             hole=0.66,
-            marker=dict(colors=colors[: len(labels)], line=dict(color="#FFFFFF", width=2)),
+            marker=dict(colors=slice_colors, line=dict(color="#FFFFFF", width=2)),
             textinfo="none",
             hovertemplate="<b>%{label}</b><br>Jumlah: %{value:,} kasus (%{percent:.1%})<extra></extra>",
             sort=False,

@@ -109,13 +109,6 @@ with f_c1:
         format_func=lambda mid: mid if mid == "Semua Mesin" else f"{mid} - {next((m['name'] for m in machines if m['machine_id']==mid), mid)}",
     )
 
-with f_c2:
-    sel_severity = st.selectbox(
-        "Filter Severity",
-        options=["Semua", "high", "medium", "low"],
-        format_func=lambda s: s.capitalize() if s != "Semua" else "Semua",
-    )
-
 with f_c3:
     date_range = st.date_input(
         "Rentang Tanggal (WIB)",
@@ -168,18 +161,7 @@ with st.spinner("Memuat data peringatan pemborosan (waste alerts)..."):
         except Exception as exc:
             failed_machines.append(f"{mid} ({exc})")
 
-# Tampilkan SATU banner gabungan jika ada sebagian mesin yang gagal
-if failed_machines:
-    st.warning(
-        f"⚠️ **Sebagian data pemborosan gagal dimuat:** {', '.join(failed_machines)}. "
-        f"Menampilkan data parsial dari mesin yang berhasil ({len(success_machines)}/{len(target_machines)} mesin).",
-        icon="⚠️",
-    )
-
-if is_mock_flag:
-    st.info("🧪 **Data contoh** — Sebagian data ditampilkan sebagai contoh (backend model belum tersedia atau USE_MOCK aktif).", icon="🧪")
-
-# Konversi ke DataFrame
+# Konversi ke DataFrame sebelum render filter severity dinamis
 if all_alerts:
     df_raw = pd.DataFrame(all_alerts)
     df_raw["timestamp"] = pd.to_datetime(df_raw["timestamp"])
@@ -193,11 +175,39 @@ if all_alerts:
         (df_raw["timestamp_wib"].dt.date <= sel_d_end)
     ].copy()
 
+    df_alerts["severity"] = df_alerts["severity"].astype(str).str.lower()
     df_alerts["hour_wib"] = df_alerts["timestamp_wib"].dt.hour
     df_alerts["severity_num"] = df_alerts["severity"].map(SEVERITY_NUM).fillna(1)
-    df_alerts["severity"] = df_alerts["severity"].str.lower()
 else:
     df_alerts = pd.DataFrame(columns=["machine_id", "timestamp", "timestamp_wib", "type", "severity", "note", "hour_wib", "severity_num"])
+
+# Opsi Filter Severity dibentuk dinamis dari nilai yang ada di data API
+if not df_alerts.empty:
+    available_severities = sorted(
+        df_alerts["severity"].dropna().unique().tolist(),
+        key=lambda s: SEVERITY_NUM.get(s, 0),
+        reverse=True,
+    )
+else:
+    available_severities = []
+
+with f_c2:
+    sel_severity = st.selectbox(
+        "Filter Severity",
+        options=["Semua"] + available_severities,
+        format_func=lambda s: s.capitalize() if s != "Semua" else "Semua",
+    )
+
+# Tampilkan SATU banner gabungan jika ada sebagian mesin yang gagal
+if failed_machines:
+    st.warning(
+        f"⚠️ **Sebagian data pemborosan gagal dimuat:** {', '.join(failed_machines)}. "
+        f"Menampilkan data parsial dari mesin yang berhasil ({len(success_machines)}/{len(target_machines)} mesin).",
+        icon="⚠️",
+    )
+
+if is_mock_flag:
+    st.info("🧪 **Data contoh** — Sebagian data ditampilkan sebagai contoh (backend model belum tersedia atau USE_MOCK aktif).", icon="🧪")
 
 # Filter tingkat keparahan (Severity)
 if sel_severity != "Semua" and not df_alerts.empty:
@@ -289,17 +299,30 @@ with tab_aktif:
         )
 
     with k4:
-        high_count = int((df_alerts["severity"] == "high").sum())
-        med_count  = int((df_alerts["severity"] == "medium").sum())
-        low_count  = int((df_alerts["severity"] == "low").sum())
+        sev_counts = df_alerts["severity"].value_counts().to_dict()
+        sev_order = ["high", "medium", "low"] + [
+            s for s in sorted(sev_counts.keys()) if s not in ("high", "medium", "low")
+        ]
+        sev_cls_map = {
+            "high": "badge-pill-red",
+            "medium": "badge-pill-amber",
+            "low": "badge-pill-green",
+        }
+        sev_pills = []
+        for s in sev_order:
+            if s in sev_counts:
+                cls = sev_cls_map.get(s, "badge-pill-grey")
+                label = "Med" if s == "medium" else s.title()
+                sev_pills.append(f'<span class="{cls}">{label} {format_id_num(sev_counts[s], 0)}</span>')
+        if not sev_pills:
+            sev_pills.append('<span class="badge-pill-grey">—</span>')
+
         st.markdown(
             "".join([
                 '<div class="kpi-card-dentexa" style="height:100%;">',
                 '<div class="kpi-label">Sebaran Severity</div>',
-                '<div style="display:flex;gap:8px;align-items:center;margin:6px 0;">',
-                f'<span class="badge-pill-red">High {format_id_num(high_count, 0)}</span>',
-                f'<span class="badge-pill-amber">Med {format_id_num(med_count, 0)}</span>',
-                f'<span class="badge-pill-green">Low {format_id_num(low_count, 0)}</span>',
+                '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0;">',
+                "".join(sev_pills),
                 '</div>',
                 f'<div class="kpi-sub">Total {format_id_num(total_alerts, 0)} kasus</div>',
                 '</div>',
@@ -383,7 +406,9 @@ with tab_aktif:
     st.markdown(table_html, unsafe_allow_html=True)
 
     if len(df_table) > 100:
-        st.caption(f"Menampilkan 100 dari total {len(df_table):,} kasus terbaru. Gunakan tombol 'Unduh Semua CSV' di atas untuk mengunduh seluruh {len(df_table):,} data terfilter.")
+        st.caption(f"Menampilkan 100 dari total {format_id_num(len(df_table), 0)} kasus terbaru. Gunakan tombol 'Unduh Semua CSV' di atas untuk mengunduh seluruh {format_id_num(len(df_table), 0)} data terfilter.")
+
+    st.caption("Titik anomali dideteksi Isolation Forest; tipe, severity, dan rekomendasi ditentukan aturan.")
 
 
 with tab_analisis:
@@ -522,34 +547,40 @@ with tab_analisis:
                 "color": "#6366F1",
             },
         }
+        FALLBACK_COLORS = ["#1D6FF2", "#F59E0B", "#EF4444", "#6366F1", "#16A34A", "#0EA5E9"]
 
-        all_types = list(TYPE_META.keys())
-        card_row1 = st.columns(2)
-        card_row2 = st.columns(2)
-
-        for i, atype in enumerate(all_types):
-            meta = TYPE_META[atype]
-            cnt = type_counts.get(atype, 0)
-            pct = (cnt / total_alerts * 100) if total_alerts > 0 else 0.0
-            target_col = card_row1[i] if i < 2 else card_row2[i - 2]
-
-            with target_col:
-                target_col.markdown(
-                    "".join([
-                        '<div class="kpi-card-dentexa" style="margin-bottom:10px;">',
-                        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">',
-                        f'<span style="font-weight:700; font-size:0.88rem; color:#111827;">{meta["title"]}</span>',
-                        f'<span class="badge-pill-blue">{cnt:,} Kasus</span>',
-                        '</div>',
-                        f'<div style="font-size:0.75rem; color:#6B7280; line-height:1.35; margin-bottom:8px;">{meta["desc"]}</div>',
-                        '<div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600; color:#6B7280; margin-bottom:4px;">',
-                        '<span>Porsi Kasus</span>',
-                        f'<span>{pct:.1f}%</span>',
-                        '</div>',
-                        '<div style="background:#F3F4F6; height:6px; border-radius:3px; overflow:hidden;">',
-                        f'<div style="background:{meta["color"]}; width:{pct:.1f}%; height:100%; border-radius:3px;"></div>',
-                        '</div>',
-                        '</div>',
-                    ]),
-                    unsafe_allow_html=True,
+        dynamic_types = sorted(type_counts.keys(), key=lambda t: -type_counts[t])
+        for row_idx in range(0, len(dynamic_types), 2):
+            pair = dynamic_types[row_idx : row_idx + 2]
+            cols = st.columns(2)
+            for col_idx, atype in enumerate(pair):
+                meta = TYPE_META.get(
+                    atype,
+                    {
+                        "title": atype.replace("_", " ").title(),
+                        "desc": "Kategori anomali konsumsi energi yang terdeteksi dari data sensor.",
+                        "color": FALLBACK_COLORS[(row_idx + col_idx) % len(FALLBACK_COLORS)],
+                    },
                 )
+                cnt = type_counts.get(atype, 0)
+                pct = (cnt / total_alerts * 100) if total_alerts > 0 else 0.0
+                with cols[col_idx]:
+                    st.markdown(
+                        "".join([
+                            '<div class="kpi-card-dentexa" style="margin-bottom:10px;">',
+                            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">',
+                            f'<span style="font-weight:700; font-size:0.88rem; color:#111827;">{meta["title"]}</span>',
+                            f'<span class="badge-pill-blue">{format_id_num(cnt, 0)} Kasus</span>',
+                            '</div>',
+                            f'<div style="font-size:0.75rem; color:#6B7280; line-height:1.35; margin-bottom:8px;">{meta["desc"]}</div>',
+                            '<div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600; color:#6B7280; margin-bottom:4px;">',
+                            '<span>Porsi Kasus</span>',
+                            f'<span>{format_id_num(pct, 1)}%</span>',
+                            '</div>',
+                            '<div style="background:#F3F4F6; height:6px; border-radius:3px; overflow:hidden;">',
+                            f'<div style="background:{meta["color"]}; width:{pct:.1f}%; height:100%; border-radius:3px;"></div>',
+                            '</div>',
+                            '</div>',
+                        ]),
+                        unsafe_allow_html=True,
+                    )

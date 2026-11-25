@@ -576,15 +576,28 @@ with row2_c2:
 with row2_c3:
     with st.container(border=True):
         mock_badge_html = '<span class="badge-mock">Contoh</span>' if has_mock_alert else ""
-        # Hitung sebaran severity
+        # Hitung sebaran severity secara dinamis dari data API
+        sev_badges = []
         if all_alerts:
             df_a = pd.DataFrame(all_alerts)
-            df_a["severity"] = df_a["severity"].str.lower()
-            h_cnt = int((df_a["severity"] == "high").sum())
-            m_cnt = int((df_a["severity"] == "medium").sum())
-            l_cnt = int((df_a["severity"] == "low").sum())
-        else:
-            h_cnt, m_cnt, l_cnt = 0, 0, 0
+            df_a["severity"] = df_a["severity"].astype(str).str.lower()
+            sev_counts = df_a["severity"].value_counts().to_dict()
+            sev_order = ["high", "medium", "low"] + [
+                s for s in sorted(sev_counts.keys()) if s not in ("high", "medium", "low")
+            ]
+            sev_cls_map = {
+                "high": "badge-pill-red",
+                "medium": "badge-pill-amber",
+                "low": "badge-pill-green",
+            }
+            for s in sev_order:
+                if s in sev_counts:
+                    cls = sev_cls_map.get(s, "badge-pill-grey")
+                    sev_badges.append(
+                        f'<span class="{cls}" style="flex:1; text-align:center;">{s.title()}: {format_id_num(sev_counts[s], 0)}</span>'
+                    )
+        if not sev_badges:
+            sev_badges.append('<span class="badge-pill-grey" style="flex:1; text-align:center;">Tidak ada alert</span>')
 
         # List anomali teratas
         rows_parts = []
@@ -610,10 +623,8 @@ with row2_c3:
                     </div>
                     <div style="font-size:12px; color:#6B7280; margin-bottom:14px;">Ringkasan anomali konsumsi daya terdeteksi</div>
 
-                    <div style="display:flex; gap:6px; margin-bottom:16px;">
-                        <span class="badge-pill-red" style="flex:1; text-align:center;">High: {format_id_num(h_cnt, 0)}</span>
-                        <span class="badge-pill-amber" style="flex:1; text-align:center;">Medium: {format_id_num(m_cnt, 0)}</span>
-                        <span class="badge-pill-green" style="flex:1; text-align:center;">Low: {format_id_num(l_cnt, 0)}</span>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">
+                        {"".join(sev_badges)}
                     </div>
 
                     {"".join(rows_parts)}
