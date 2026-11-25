@@ -1,4 +1,5 @@
 import sys
+import json
 from pathlib import Path
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -603,3 +604,73 @@ with tab_analisis:
                         ]),
                         unsafe_allow_html=True,
                     )
+
+
+# ---------------------------------------------------------------------------
+# Performa Model Anomali (Evaluasi Offline)
+# ---------------------------------------------------------------------------
+st.markdown("<div style='margin:1.2rem 0;'></div>", unsafe_allow_html=True)
+
+with st.expander("📊 Performa Model Deteksi Anomali (Evaluasi Offline)"):
+    _eval_path = ROOT_DIR / "ml" / "anomaly" / "eval_summary.json"
+
+    try:
+        with open(_eval_path, "r", encoding="utf-8") as _f:
+            _eval = json.load(_f)
+    except Exception as exc:
+        st.caption(f"File evaluasi model tidak ditemukan atau tidak bisa dibaca: {exc}")
+    else:
+        _precision = float(_eval.get("precision", 0.0))
+        _recall = float(_eval.get("recall", 0.0))
+        _f1 = float(_eval.get("f1_score", 0.0))
+        _cm = _eval.get("confusion_matrix") or [[0, 0], [0, 0]]
+        _tn, _fp = _cm[0]
+        _fn, _tp = _cm[1]
+
+        _metric_cols = st.columns(3)
+        _metric_specs = [
+            ("Precision", _precision, "badge-pill-blue"),
+            ("Recall", _recall, "badge-pill-green"),
+            ("F1-Score", _f1, "badge-pill-amber"),
+        ]
+        for _col, (_label, _value, _badge_cls) in zip(_metric_cols, _metric_specs):
+            with _col:
+                st.markdown(
+                    "".join([
+                        '<div class="kpi-card" style="height:100%;">',
+                        f'<div class="kpi-label">{_label}</div>',
+                        f'<div><span class="kpi-val">{format_id_num(_value * 100, 1)}</span><span class="kpi-unit">%</span></div>',
+                        f'<div class="kpi-sub"><span class="{_badge_cls}">Evaluasi data uji</span></div>',
+                        '</div>',
+                    ]),
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown(
+            "".join([
+                '<div style="font-size:12px; color:#6B7280; margin:10px 0 6px 0; line-height:1.5;">',
+                f'Isolation Forest dengan <b>contamination {format_id_num(float(_eval.get("contamination", 0.0)) * 100, 0)}%</b> · ',
+                f'<b>{format_id_num(_eval.get("detected_anomalies", 0), 0)}</b> anomali terdeteksi dari ',
+                f'<b>{format_id_num(_eval.get("total_rows", 0), 0)}</b> baris data uji.',
+                '</div>',
+            ]),
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            "".join([
+                '<div class="data-table-container"><div style="overflow-x:auto;">',
+                '<table class="data-table">',
+                '<thead><tr><th>Confusion Matrix</th><th>Prediksi Normal</th><th>Prediksi Anomali</th></tr></thead>',
+                '<tbody>',
+                f'<tr><td style="font-weight:600; color:#111827;">Aktual Normal</td><td>{format_id_num(_tn, 0)} (TN)</td><td>{format_id_num(_fp, 0)} (FP)</td></tr>',
+                f'<tr><td style="font-weight:600; color:#111827;">Aktual Anomali</td><td>{format_id_num(_fn, 0)} (FN)</td><td>{format_id_num(_tp, 0)} (TP)</td></tr>',
+                '</tbody></table></div></div>',
+            ]),
+            unsafe_allow_html=True,
+        )
+
+        st.caption(
+            "Metrik dihitung pada data uji berlabel (ground truth), bukan data produksi. "
+            "Model yang dipakai: Isolation Forest."
+        )
