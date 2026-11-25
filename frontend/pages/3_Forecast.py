@@ -328,7 +328,7 @@ if last_actual_time is not None:
     )
     fig.add_annotation(
         x=last_actual_time,
-        y=1,
+        y=1.0,
         yref="paper",
         text="Batas Aktual / Mulai Prediksi",
         showarrow=False,
@@ -343,17 +343,19 @@ style_plotly_fig(fig, height=360)
 fig.update_layout(
     legend=dict(
         orientation="h",
-        x=0.5,
-        xanchor="center",
-        yanchor="top",
-        y=-0.12,
+        yref="paper",
+        y=1.08,
+        yanchor="bottom",
+        x=1,
+        xanchor="right",
         font=dict(size=11, color="#6B7280"),
     ),
-    margin=dict(l=20, r=20, t=50, b=60),
+    margin=dict(l=20, r=20, t=60, b=30),
     hovermode="x unified",
 )
 fig.update_xaxes(
     title_text="Waktu (WIB)",
+    title_standoff=12,
     tickfont=dict(size=11, color="#6B7280"),
     title_font=dict(size=11, color="#6B7280"),
 )
@@ -361,6 +363,7 @@ fig.update_yaxes(
     title_text="Konsumsi Energi (kWh)",
     tickfont=dict(size=11, color="#6B7280"),
     title_font=dict(size=11, color="#6B7280"),
+    range=[0, float(max(pred_plot_y)) * 1.25],
 )
 
 # Tampilkan Kontainer Kartu Grafik
