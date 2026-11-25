@@ -484,41 +484,90 @@ st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 row2_c1, row2_c2, row2_c3 = st.columns([1.25, 1.05, 1.1])
 
-# --- Kolom 1: Financial Overview Style (Beban Daya per Mesin / Lini) ---
+# --- Kolom 1: Konsumsi Energi (per Mesin / Lini / Shift) ---
 with row2_c1:
     with st.container(border=True):
         st.markdown(
-            """
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <div style="font-size:0.95rem; font-weight:700; color:#111827;">Konsumsi Daya per Mesin</div>
-                <div style="font-size:11px; color:#6B7280;">Total 12 Mesin</div>
-            </div>
-            <div style="font-size:11px; color:#6B7280; margin-bottom:8px;">Akumulasi konsumsi energi listrik per ID mesin</div>
-            """,
+            '<div style="font-size:0.95rem; font-weight:700; color:#111827; margin-bottom:6px;">Konsumsi Energi</div>',
             unsafe_allow_html=True,
         )
 
+        view_mode = st.segmented_control(
+            "Tampilan konsumsi",
+            options=["Mesin", "Lini", "Shift"],
+            default="Mesin",
+            selection_mode="single",
+            label_visibility="collapsed",
+            key="overview_consumption_view",
+        ) or "Mesin"
+
         if all_readings:
-            mach_kwh = (
-                df_readings.groupby("machine_id", as_index=False)["energy_kwh"]
-                .sum()
-                .sort_values("energy_kwh", ascending=True)
+            if view_mode == "Lini":
+                line_map = {
+                    m["machine_id"]: (str(m.get("line", "")).strip() or "Tanpa Lini")
+                    for m in machines
+                }
+                tmp = df_readings.copy()
+                tmp["line"] = tmp["machine_id"].map(line_map).fillna("Tanpa Lini")
+                agg = (
+                    tmp.groupby("line", as_index=False)["energy_kwh"]
+                    .sum()
+                    .sort_values("energy_kwh", ascending=True)
+                )
+                agg["label"] = agg["line"]
+                subtitle = "Akumulasi energi listrik per lini produksi"
+                count_label = f"{agg['line'].nunique()} lini"
+                bar_color = "#10B981"
+            elif view_mode == "Shift":
+                def _shift_label(hour: int) -> str:
+                    if 7 <= hour < 15:
+                        return "Pagi (07-15)"
+                    if 15 <= hour < 23:
+                        return "Siang (15-23)"
+                    return "Malam (23-07)"
+
+                tmp = df_readings.copy()
+                tmp["shift"] = tmp["timestamp_wib"].dt.hour.map(_shift_label)
+                agg = tmp.groupby("shift", as_index=False)["energy_kwh"].sum()
+                order = {"Pagi (07-15)": 0, "Siang (15-23)": 1, "Malam (23-07)": 2}
+                agg["_order"] = agg["shift"].map(order)
+                # Horizontal bar: urutan dibalik agar Pagi tampil paling atas.
+                agg = agg.sort_values("_order", ascending=False)
+                agg["label"] = agg["shift"]
+                subtitle = "Akumulasi energi listrik per shift kerja (WIB)"
+                count_label = "3 shift"
+                bar_color = "#F59E0B"
+            else:
+                agg = (
+                    df_readings.groupby("machine_id", as_index=False)["energy_kwh"]
+                    .sum()
+                    .sort_values("energy_kwh", ascending=True)
+                )
+                agg["label"] = agg["machine_id"]
+                subtitle = "Akumulasi energi listrik per ID mesin"
+                count_label = f"{df_readings['machine_id'].nunique()} mesin"
+                bar_color = "#1D6FF2"
+
+            st.markdown(
+                f'<div style="font-size:11px; color:#6B7280; margin:6px 0 8px 0;">'
+                f'{subtitle} &middot; <b style="color:#111827;">{count_label}</b></div>',
+                unsafe_allow_html=True,
             )
 
             fig_bar_mach = go.Figure(
                 go.Bar(
-                    x=mach_kwh["energy_kwh"],
-                    y=mach_kwh["machine_id"],
+                    x=agg["energy_kwh"],
+                    y=agg["label"],
                     orientation="h",
                     marker=dict(
-                        color="#1D6FF2",
+                        color=bar_color,
                         cornerradius=5,
                     ),
-                    text=mach_kwh["energy_kwh"].apply(lambda v: f"{format_id_num(v, 0)}"),
+                    text=agg["energy_kwh"].apply(lambda v: f"{format_id_num(v, 0)}"),
                     textposition="outside",
                     cliponaxis=False,
                     textfont=dict(size=10, color="#111827", family="Inter, sans-serif"),
-                    hovertemplate="<b>Mesin %{y}</b><br>Konsumsi: %{x:,.1f} kWh<extra></extra>",
+                    hovertemplate="<b>%{y}</b><br>Konsumsi: %{x:,.1f} kWh<extra></extra>",
                 )
             )
             style_plotly_fig(fig_bar_mach, height=220)
@@ -529,7 +578,7 @@ with row2_c1:
             )
             st.plotly_chart(fig_bar_mach, use_container_width=True, config={"displayModeBar": False})
         else:
-            st.info("Data konsumsi per mesin belum tersedia.")
+            st.info("Data konsumsi belum tersedia.")
 
 
 # --- Kolom 2: Patient Data Style (Utilisasi Daya & Kapasitas) ---
