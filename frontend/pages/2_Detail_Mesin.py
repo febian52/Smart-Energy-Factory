@@ -1,3 +1,4 @@
+import io
 import sys
 from pathlib import Path
 from datetime import datetime, time, timedelta
@@ -24,7 +25,6 @@ try:
         apply_theme,
         style_plotly_fig,
         format_id_num,
-        render_dentexa_topbar,
     )
 except ImportError:
     from api_client import (
@@ -37,12 +37,11 @@ except ImportError:
         apply_theme,
         style_plotly_fig,
         format_id_num,
-        render_dentexa_topbar,
     )
 
 try:
     st.set_page_config(
-        page_title="Detail Mesin - Smart Factory Energy Management",
+        page_title="Detail Mesin - Smart Energy Factory",
         page_icon="⚡",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -80,8 +79,6 @@ if not machines:
 # ---------------------------------------------------------------------------
 # Header Halaman & Segmented Filter Control
 # ---------------------------------------------------------------------------
-render_dentexa_topbar(page_title="Detail Mesin", welcome_sub="Profil Operasional & Telemetri")
-
 header_c1, header_c2 = st.columns([2.2, 1.2])
 
 with header_c1:
@@ -273,7 +270,7 @@ with spec_c2:
             f'<span class="kpi-val">{format_id_num(total_energy_kwh, 1)}</span>',
             '<span class="kpi-unit">kWh</span>',
             '</div>',
-            f'<div class="kpi-sub"><span class="badge-pill-green">Akumulasi {format_id_num(total_duration_hours, 1)} jam</span> <span style="color:#6B7280;font-size:11px;">({total_readings:,} data)</span></div>'.replace(',', '.'),
+            f'<div class="kpi-sub"><span class="badge-pill-green">Akumulasi {format_id_num(total_duration_hours, 1)} jam</span> <span style="color:#6B7280;font-size:12px;">({format_id_num(total_readings, 0)} data)</span></div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
@@ -482,64 +479,105 @@ st.markdown("<div style='margin:1.4rem 0;'></div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Tabel Riwayat Telemetri (Gaya 'Treatments' Dentexa)
+# Tabel Riwayat Telemetri Sensor (Expander, Default Tertutup)
 # ---------------------------------------------------------------------------
-st.markdown(
-    "".join([
-        '<div style="font-weight:700; font-size:1.05rem; color:#111827; margin-bottom:4px;">Riwayat Telemetri Sensor</div>',
-        '<div style="font-size:12px; color:#6B7280; font-weight:500; margin-bottom:12px;">Data pembacaan telemetri berurutan (WIB) · Menampilkan hingga 100 data terbaru</div>',
-    ]),
-    unsafe_allow_html=True,
-)
+with st.expander("Riwayat Telemetri Sensor", expanded=False):
+    exp_c1, exp_c2, exp_c3 = st.columns([2.4, 1.0, 1.3])
+    with exp_c1:
+        st.markdown(
+            '<div style="font-size:12px; color:#6B7280; font-weight:500; padding-top:8px;">'
+            'Data pembacaan telemetri berurutan (WIB) &middot; Maksimal 50 baris terbaru'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    with exp_c3:
+        agg_tbl = (
+            st.segmented_control(
+                "Agregasi Tabel Telemetri",
+                options=["Per Jam", "Per 5 Menit"],
+                default="Per Jam",
+                selection_mode="single",
+                label_visibility="collapsed",
+                key="tbl_agg_mode",
+            )
+            or "Per Jam"
+        )
 
-available_cols = ["timestamp_wib", "power_kw", "energy_kwh", "status"]
-df_table = df_raw[available_cols].copy()
-df_table = df_table.sort_values("timestamp_wib", ascending=False).reset_index(drop=True)
-display_table = df_table.head(100)
-
-tbl_rows = []
-for idx, row in display_table.iterrows():
-    st_val = str(row["status"]).lower()
-    if st_val == "running":
-        pill = '<span class="badge-pill-green">Running</span>'
-    elif st_val == "idle":
-        pill = '<span class="badge-pill-amber">Idle</span>'
+    available_cols = ["timestamp_wib", "power_kw", "energy_kwh", "status"]
+    if agg_tbl == "Per Jam":
+        df_tbl = df_raw[available_cols].copy()
+        df_tbl["bucket"] = df_tbl["timestamp_wib"].dt.floor("h")
+        df_tbl = (
+            df_tbl.groupby("bucket", as_index=False)
+            .agg(
+                power_kw=("power_kw", "mean"),
+                energy_kwh=("energy_kwh", "sum"),
+                status=("status", lambda s: s.mode().iloc[0] if len(s) > 0 else "off"),
+            )
+            .rename(columns={"bucket": "timestamp_wib"})
+        )
     else:
-        pill = '<span class="badge-pill-grey">Off</span>'
+        df_tbl = df_raw[available_cols].copy()
 
-    ts_str = row["timestamp_wib"].strftime("%d %b %Y, %H:%M WIB")
-    p_str = f"{format_id_num(float(row['power_kw']), 2)} kW"
-    e_str = f"{format_id_num(float(row['energy_kwh']), 3)} kWh"
+    df_tbl = df_tbl.sort_values("timestamp_wib", ascending=False).reset_index(drop=True)
 
-    tbl_rows.append(
-        f'<tr>'
-        f'<td style="white-space:nowrap; font-weight:600; color:#111827;">{ts_str}</td>'
-        f'<td style="font-weight:600; color:#1D6FF2;">{p_str}</td>'
-        f'<td style="color:#111827;">{e_str}</td>'
-        f'<td>{pill}</td>'
-        f'</tr>'
-    )
+    with exp_c2:
+        csv_buf = io.StringIO()
+        df_tbl.to_csv(csv_buf, index=False)
+        st.download_button(
+            "Unduh CSV",
+            data=csv_buf.getvalue(),
+            file_name=f"telemetri_{selected_machine_id}_{'per_jam' if agg_tbl == 'Per Jam' else '5_menit'}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
-table_html = "".join([
-    '<div class="dentexa-table-container">',
-    '<div style="overflow-x:auto;">',
-    '<table class="dentexa-table">',
-    '<thead>',
-    '<tr>',
-    '<th>Waktu (WIB)</th>',
-    '<th>Daya (kW)</th>',
-    '<th>Energi (kWh)</th>',
-    '<th>Status Mesin</th>',
-    '</tr>',
-    '</thead>',
-    '<tbody>',
-    "".join(tbl_rows),
-    '</tbody>',
-    '</table>',
-    '</div>',
-    '</div>',
-])
-st.markdown(table_html, unsafe_allow_html=True)
+    display_table = df_tbl.head(50)
+    tbl_rows = []
+    for _, row in display_table.iterrows():
+        st_val = str(row["status"]).lower()
+        if st_val == "running":
+            pill = '<span class="badge-pill-green">Running</span>'
+        elif st_val == "idle":
+            pill = '<span class="badge-pill-amber">Idle</span>'
+        else:
+            pill = '<span class="badge-pill-grey">Off</span>'
 
-if len(df_table) > 100:
-    st.caption(f"Menampilkan 100 dari total {len(df_table):,} pembacaan sensor pada rentang tanggal terpilih.")
+        ts_str = row["timestamp_wib"].strftime("%d %b %Y, %H:%M WIB")
+        p_str = f"{format_id_num(float(row['power_kw']), 2)} kW"
+        e_str = f"{format_id_num(float(row['energy_kwh']), 3)} kWh"
+
+        tbl_rows.append(
+            f'<tr>'
+            f'<td style="white-space:nowrap; font-weight:600; color:#111827; width:35%;">{ts_str}</td>'
+            f'<td style="white-space:nowrap; font-weight:600; color:#1D6FF2; width:22%;">{p_str}</td>'
+            f'<td style="white-space:nowrap; color:#111827; width:23%;">{e_str}</td>'
+            f'<td style="white-space:nowrap; width:20%;">{pill}</td>'
+            f'</tr>'
+        )
+
+    table_html = "".join([
+        '<div class="dentexa-table-container">',
+        '<div style="overflow-x:auto;">',
+        '<table class="dentexa-table" style="table-layout:fixed; width:100%;">',
+        '<thead>',
+        '<tr>',
+        '<th style="width:35%;">Waktu (WIB)</th>',
+        '<th style="width:22%;">Daya (kW)</th>',
+        '<th style="width:23%;">Energi (kWh)</th>',
+        '<th style="width:20%;">Status Mesin</th>',
+        '</tr>',
+        '</thead>',
+        '<tbody>',
+        "".join(tbl_rows),
+        '</tbody>',
+        '</table>',
+        '</div>',
+        '</div>',
+    ])
+    st.markdown(table_html, unsafe_allow_html=True)
+
+    if len(df_tbl) > 50:
+        st.caption(
+            f"Menampilkan 50 dari total {format_id_num(len(df_tbl), 0)} baris ({agg_tbl.lower()}) pada rentang tanggal terpilih."
+        )

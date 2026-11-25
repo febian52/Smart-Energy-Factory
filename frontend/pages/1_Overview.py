@@ -29,7 +29,6 @@ try:
         format_id_num,
         format_id_currency,
         create_status_donut,
-        render_dentexa_topbar,
     )
 except ImportError:
     from api_client import (
@@ -46,12 +45,11 @@ except ImportError:
         format_id_num,
         format_id_currency,
         create_status_donut,
-        render_dentexa_topbar,
     )
 
 try:
     st.set_page_config(
-        page_title="Dashboard - Smart Factory Energy Management",
+        page_title="Dashboard - Smart Energy Factory",
         page_icon="⚡",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -296,15 +294,13 @@ else:
 
 
 # ---------------------------------------------------------------------------
-# 1. Top Bar Dentexa & Salam Pengguna (Gaya Gambar 1 Dentexa)
+# 1. Header Halaman Berbasis Data
 # ---------------------------------------------------------------------------
-render_dentexa_topbar(page_title="Dashboard", welcome_sub="Smart Energy Factory")
-
 st.markdown(
     f"""
-    <div style="margin-bottom: 22px;">
-        <h1 style="color: #111827; font-size: 1.65rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">
-            Welcome back, Tim Energi Pabrik!
+    <div style="margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #E5E8EF;">
+        <h1 style="color: #111827; font-size: 1.55rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">
+            Energy Dashboard Overview
         </h1>
         <div style="font-size: 13px; font-weight: 500; color: #6B7280;">
             {lines_str} &middot; Periode Data: <b style="color:#111827;">{period_str}</b>
@@ -528,43 +524,47 @@ with row2_c2:
     with st.container(border=True):
         st.markdown(
             f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <div style="font-size:0.95rem; font-weight:700; color:#111827;">Utilisasi Daya</div>
-                <span class="badge-pill-blue">Daya Terpasang</span>
-            </div>
-            <div style="font-size:11px; color:#6B7280; margin-bottom:12px;">Beban saat ini terhadap kapasitas total pabrik</div>
+            <div style="min-height: 280px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <div style="font-size:0.95rem; font-weight:700; color:#111827;">Utilisasi Daya</div>
+                        <span class="badge-pill-blue">Daya Terpasang</span>
+                    </div>
+                    <div style="font-size:12px; color:#6B7280; margin-bottom:18px;">Beban saat ini terhadap kapasitas total pabrik</div>
 
-            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
-                <div>
-                    <span style="font-size:11px; color:#6B7280; font-weight:600; text-transform:uppercase;">Jam Terakhir</span>
-                    <div style="font-size:1.5rem; font-weight:800; color:#111827;">{format_id_num(cur_power, 1)} <span style="font-size:12px; font-weight:500; color:#6B7280;">kW</span></div>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-size:11px; color:#6B7280; font-weight:600; text-transform:uppercase;">Kapasitas</span>
-                    <div style="font-size:1.15rem; font-weight:700; color:#6B7280;">{format_id_num(total_rated_kw, 0)} <span style="font-size:11px; font-weight:500;">kW</span></div>
-                </div>
-            </div>
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;">
+                        <div>
+                            <span style="font-size:11px; color:#6B7280; font-weight:600; text-transform:uppercase;">Jam Terakhir</span>
+                            <div style="font-size:1.55rem; font-weight:800; color:#111827;">{format_id_num(cur_power, 1)} <span style="font-size:12px; font-weight:500; color:#6B7280;">kW</span></div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="font-size:11px; color:#6B7280; font-weight:600; text-transform:uppercase;">Kapasitas</span>
+                            <div style="font-size:1.2rem; font-weight:700; color:#6B7280;">{format_id_num(total_rated_kw, 0)} <span style="font-size:12px; font-weight:500;">kW</span></div>
+                        </div>
+                    </div>
 
-            <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600; color:#1D6FF2; margin-bottom:4px;">
-                <span>Rasio Beban</span>
-                <span>{format_id_num(utilisasi_pct, 1)}%</span>
-            </div>
-            <div style="background:#F3F4F6; height:8px; border-radius:4px; overflow:hidden; margin-bottom:16px;">
-                <div style="background:#1D6FF2; width:{min(100.0, utilisasi_pct):.1f}%; height:100%; border-radius:4px;"></div>
-            </div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:#1D6FF2; margin-bottom:6px;">
+                        <span>Rasio Beban</span>
+                        <span>{format_id_num(utilisasi_pct, 1)}%</span>
+                    </div>
+                    <div style="background:#F3F4F6; height:8px; border-radius:4px; overflow:hidden; margin-bottom:16px;">
+                        <div style="background:#1D6FF2; width:{min(100.0, utilisasi_pct):.1f}%; height:100%; border-radius:4px;"></div>
+                    </div>
+                </div>
 
-            <div style="display:flex; justify-content:space-between; padding-top:8px; border-top:1px solid #E5E8EF; font-size:11px;">
-                <div>
-                    <span style="color:#6B7280;">Min Beban:</span>
-                    <b style="color:#111827; margin-left:3px;">{format_id_num(min_power, 1)} kW</b>
-                </div>
-                <div>
-                    <span style="color:#6B7280;">Puncak:</span>
-                    <b style="color:#1D6FF2; margin-left:3px;">{format_id_num(max_power, 1)} kW</b>
-                </div>
-                <div>
-                    <span style="color:#6B7280;">Rata-rata:</span>
-                    <b style="color:#111827; margin-left:3px;">{format_id_num(avg_power, 1)} kW</b>
+                <div style="display:flex; justify-content:space-between; padding-top:12px; border-top:1px solid #E5E8EF; font-size:12px;">
+                    <div>
+                        <span style="color:#6B7280;">Min Beban:</span>
+                        <b style="color:#111827; margin-left:3px;">{format_id_num(min_power, 1)} kW</b>
+                    </div>
+                    <div>
+                        <span style="color:#6B7280;">Puncak:</span>
+                        <b style="color:#1D6FF2; margin-left:3px;">{format_id_num(max_power, 1)} kW</b>
+                    </div>
+                    <div>
+                        <span style="color:#6B7280;">Rata-rata:</span>
+                        <b style="color:#111827; margin-left:3px;">{format_id_num(avg_power, 1)} kW</b>
+                    </div>
                 </div>
             </div>
             """,
@@ -576,17 +576,6 @@ with row2_c2:
 with row2_c3:
     with st.container(border=True):
         mock_badge_html = '<span class="badge-mock">Contoh</span>' if has_mock_alert else ""
-        st.markdown(
-            f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <div style="font-size:0.95rem; font-weight:700; color:#111827;">Peringatan Pemborosan {mock_badge_html}</div>
-                <span class="badge-pill-amber">{total_waste_alerts} Kasus</span>
-            </div>
-            <div style="font-size:11px; color:#6B7280; margin-bottom:10px;">Ringkasan anomali konsumsi daya terdeteksi</div>
-            """,
-            unsafe_allow_html=True,
-        )
-
         # Hitung sebaran severity
         if all_alerts:
             df_a = pd.DataFrame(all_alerts)
@@ -597,32 +586,45 @@ with row2_c3:
         else:
             h_cnt, m_cnt, l_cnt = 0, 0, 0
 
-        st.markdown(
-            f"""
-            <div style="display:flex; gap:6px; margin-bottom:12px;">
-                <span class="badge-pill-red" style="flex:1; text-align:center;">High: {h_cnt}</span>
-                <span class="badge-pill-amber" style="flex:1; text-align:center;">Medium: {m_cnt}</span>
-                <span class="badge-pill-green" style="flex:1; text-align:center;">Low: {l_cnt}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
         # List anomali teratas
         rows_parts = []
         if alert_type_counts:
             for atype, count in sorted(alert_type_counts.items(), key=lambda x: -x[1])[:3]:
                 readable_type = atype.replace("_", " ").title()
                 rows_parts.append(
-                    f'<div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:5px 0; border-bottom:1px solid #F3F4F6;">'
+                    f'<div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:7px 0; border-bottom:1px solid #F3F4F6;">'
                     f'<span style="color:#6B7280; font-weight:500;">{readable_type}</span>'
-                    f'<span style="font-weight:700; color:#111827;">{count}</span>'
+                    f'<span style="font-weight:700; color:#111827;">{format_id_num(count, 0)}</span>'
                     f'</div>'
                 )
         else:
             rows_parts.append('<div style="font-size:12px; color:#6B7280; padding:10px 0;">Tidak ada anomali terdeteksi.</div>')
 
-        st.markdown("".join(rows_parts), unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div style="min-height: 280px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <div style="font-size:0.95rem; font-weight:700; color:#111827;">Peringatan Pemborosan {mock_badge_html}</div>
+                        <span class="badge-pill-amber">{format_id_num(total_waste_alerts, 0)} Kasus</span>
+                    </div>
+                    <div style="font-size:12px; color:#6B7280; margin-bottom:14px;">Ringkasan anomali konsumsi daya terdeteksi</div>
+
+                    <div style="display:flex; gap:6px; margin-bottom:16px;">
+                        <span class="badge-pill-red" style="flex:1; text-align:center;">High: {format_id_num(h_cnt, 0)}</span>
+                        <span class="badge-pill-amber" style="flex:1; text-align:center;">Medium: {format_id_num(m_cnt, 0)}</span>
+                        <span class="badge-pill-green" style="flex:1; text-align:center;">Low: {format_id_num(l_cnt, 0)}</span>
+                    </div>
+
+                    {"".join(rows_parts)}
+                </div>
+                <div style="font-size:12px; color:#6B7280; padding-top:10px; border-top:1px solid #E5E8EF;">
+                    Lihat detail rekomendasi pada halaman <b style="color:#1D6FF2;">Waste Alerts</b>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
 

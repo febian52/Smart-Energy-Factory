@@ -20,13 +20,13 @@ except ImportError:
 # Konfigurasi Halaman Utama
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Smart Factory Energy Management",
+    page_title="Smart Energy Factory",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Terapkan Tema Dentexa secara global
+# Terapkan tema global
 apply_theme()
 
 
@@ -42,16 +42,9 @@ with st.sidebar:
             '⚡',
             '</div>',
             '<div>',
-            '<div style="font-size: 1.05rem; font-weight: 800; color: #111827; line-height: 1.2; letter-spacing:-0.02em;">Dentexa Energy</div>',
-            '<div style="font-size: 0.72rem; color: #6B7280; font-weight: 500;">Smart Factory Management</div>',
+            '<div style="font-size: 1.0rem; font-weight: 800; color: #111827; line-height: 1.2; letter-spacing:-0.02em;">Smart Energy Factory</div>',
+            '<div style="font-size: 0.72rem; color: #6B7280; font-weight: 500;">Monitoring via REST API</div>',
             '</div>',
-            '</div>',
-            '</div>',
-            '<div style="background:#F3F4F6; border:1px solid #E5E8EF; border-radius:10px; padding:8px 12px; margin-bottom:14px; display:flex; align-items:center; gap:10px;">',
-            '<div style="width:28px; height:28px; background:#FFFFFF; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">🏭</div>',
-            '<div style="line-height:1.2;">',
-            '<div style="font-size:12px; font-weight:700; color:#111827;">Pabrik Manufaktur 01</div>',
-            '<div style="font-size:10px; color:#6B7280;">Lini A, B, C &middot; 12 Mesin</div>',
             '</div>',
             '</div>',
         ]),
@@ -94,8 +87,8 @@ with st.sidebar:
     st.markdown(
         "".join([
             '<div class="sidebar-info-box">',
-            '<div style="font-weight: 600; color: #111827; margin-bottom: 3px;">Status Operasional</div>',
-            '<div>Data telemetri 12 mesin pabrik terhubung secara real-time via REST API.</div>',
+            '<div style="font-weight: 600; color: #111827; margin-bottom: 3px;">Koneksi Backend</div>',
+            '<div>Data telemetri 12 mesin pabrik terhubung via REST API.</div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
@@ -116,7 +109,7 @@ def render_beranda():
             'Smart Factory Energy Management',
             '</h1>',
             '<p style="color: #6B7280; font-size: 0.95rem; margin: 0; max-width: 820px; line-height: 1.55;">',
-            'Platform manajemen energi pabrik cerdas: pemantauan konsumsi daya real-time, '
+            'Platform manajemen energi pabrik cerdas: pemantauan konsumsi daya via REST API, '
             'peramalan beban listrik multi-horizon, dan deteksi anomali pemborosan operasional.',
             '</p>',
             '</div>',

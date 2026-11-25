@@ -26,7 +26,6 @@ try:
         style_plotly_fig,
         format_id_num,
         format_id_currency,
-        render_dentexa_topbar,
     )
 except ImportError:
     import api_client as ac
@@ -42,7 +41,6 @@ except ImportError:
         style_plotly_fig,
         format_id_num,
         format_id_currency,
-        render_dentexa_topbar,
     )
 
 # Model ML memprediksi hingga 168 jam secara autoregresif (168 langkah inferensi).
@@ -52,7 +50,7 @@ if hasattr(ac, "TIMEOUT"):
 
 try:
     st.set_page_config(
-        page_title="Forecast - Smart Factory Energy Management",
+        page_title="Forecast - Smart Energy Factory",
         page_icon="⚡",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -84,8 +82,20 @@ except Exception as exc:
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Kontrol Pilihan Mesin & Horizon Prediksi
+# Header Halaman & Kontrol Pilihan Mesin + Horizon Prediksi
 # ---------------------------------------------------------------------------
+header_title_html = "".join([
+    '<div style="margin: 0 0 14px 0; padding-bottom: 12px; border-bottom: 1px solid #E5E8EF;">',
+    '<h1 style="color: #111827; font-size: 1.55rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">',
+    'Forecast Konsumsi Energi',
+    '</h1>',
+    '<div style="font-size: 13px; font-weight: 500; color: #6B7280;">',
+    'Prediksi beban energi per mesin menggunakan model ML (WIB)',
+    '</div>',
+    '</div>',
+])
+st.markdown(header_title_html, unsafe_allow_html=True)
+
 ctrl_c1, ctrl_c2 = st.columns([2.2, 1.4])
 
 with ctrl_c1:
@@ -111,21 +121,6 @@ with ctrl_c2:
         label_visibility="collapsed",
     ) or "24 Jam"
     selected_hours = 24 if horizon_label == "24 Jam" else 168
-
-# Header Halaman Bersih & Dinamis (Dentexa Style)
-render_dentexa_topbar(page_title="Forecast", welcome_sub="Prediksi Konsumsi Beban Energi")
-
-header_title_html = "".join([
-    '<div style="margin: 10px 0 16px 0;">',
-    '<h1 style="color: #111827; font-size: 1.65rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">',
-    'Forecast Konsumsi Energi',
-    '</h1>',
-    '<div style="font-size: 12px; font-weight: 500; color: #6B7280; letter-spacing: 0.02em;">',
-    f'{selected_machine_id} - {selected_machine.get("name", "Mesin")} · {selected_machine.get("line", "Line")} · Horizon {selected_hours} Jam (WIB)',
-    '</div>',
-    '</div>',
-])
-st.markdown(header_title_html, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # 2. Pengambilan Data Prediksi Model ML

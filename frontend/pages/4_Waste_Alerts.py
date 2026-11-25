@@ -16,14 +16,14 @@ for p in (str(CURRENT_DIR.parent), str(ROOT_DIR)):
 
 try:
     from frontend.api_client import get_machines, get_waste_alerts, get_data_range
-    from frontend.ui import apply_theme, style_plotly_fig, create_type_donut, render_dentexa_topbar
+    from frontend.ui import apply_theme, style_plotly_fig, create_type_donut, format_id_num
 except ImportError:
     from api_client import get_machines, get_waste_alerts, get_data_range
-    from ui import apply_theme, style_plotly_fig, create_type_donut, render_dentexa_topbar
+    from ui import apply_theme, style_plotly_fig, create_type_donut, format_id_num
 
 try:
     st.set_page_config(
-        page_title="Waste Alerts - Smart Factory Energy Management",
+        page_title="Waste Alerts - Smart Energy Factory",
         page_icon="⚡",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -65,14 +65,12 @@ except Exception as exc:
 
 
 # ---------------------------------------------------------------------------
-# Header Halaman (Dentexa Clean Header)
+# Header Halaman
 # ---------------------------------------------------------------------------
-render_dentexa_topbar(page_title="Waste Alerts", welcome_sub="Deteksi Anomali Pemborosan Energi")
-
 st.markdown(
     """
-    <div style="margin-bottom: 22px;">
-        <h1 style="color: #111827; font-size: 1.65rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">
+    <div style="margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #E5E8EF;">
+        <h1 style="color: #111827; font-size: 1.55rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">
             Peringatan Pemborosan Energi (Waste Alerts)
         </h1>
         <p style="color: #6B7280; font-size: 0.88rem; margin: 0; max-width: 850px; line-height: 1.5;">
@@ -282,9 +280,9 @@ with tab_aktif:
         st.markdown(
             "".join([
                 '<div class="kpi-card-dentexa" style="height:100%;">',
-                '<div class="kpi-label">Mesin Paling Boros</div>',
+                '<div class="kpi-label">Mesin Paling Sering Alert</div>',
                 f'<div><span class="kpi-val">{top_mach}</span></div>',
-                f'<div class="kpi-sub"><span class="badge-pill-amber">{top_mach_count:,} Kejadian</span></div>',
+                f'<div class="kpi-sub"><span class="badge-pill-amber">{format_id_num(top_mach_count, 0)} Kejadian</span></div>',
                 '</div>',
             ]),
             unsafe_allow_html=True,
@@ -299,11 +297,11 @@ with tab_aktif:
                 '<div class="kpi-card-dentexa" style="height:100%;">',
                 '<div class="kpi-label">Sebaran Severity</div>',
                 '<div style="display:flex;gap:8px;align-items:center;margin:6px 0;">',
-                f'<span class="badge-pill-red">High {high_count:,}</span>',
-                f'<span class="badge-pill-amber">Med {med_count:,}</span>',
-                f'<span class="badge-pill-green">Low {low_count:,}</span>',
+                f'<span class="badge-pill-red">High {format_id_num(high_count, 0)}</span>',
+                f'<span class="badge-pill-amber">Med {format_id_num(med_count, 0)}</span>',
+                f'<span class="badge-pill-green">Low {format_id_num(low_count, 0)}</span>',
                 '</div>',
-                f'<div class="kpi-sub">Total {total_alerts:,} kasus</div>',
+                f'<div class="kpi-sub">Total {format_id_num(total_alerts, 0)} kasus</div>',
                 '</div>',
             ]),
             unsafe_allow_html=True,

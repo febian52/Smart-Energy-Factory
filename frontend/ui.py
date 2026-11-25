@@ -1,8 +1,8 @@
 """
 frontend/ui.py
 ==============
-Modul utilitas UI & Styling untuk Smart Factory Energy Management.
-Menerapkan Design System 'Dentexa' (SaaS Admin Dashboard):
+Modul utilitas UI & Styling untuk Smart Energy Factory.
+Design System SaaS Admin:
 - Skema warna: Primer Biru #1D6FF2, Latar Halaman Abu Muda #F3F5F9, Kartu Putih #FFFFFF
 - Border tipis bersih #E5E8EF, Radius 12-14px, Tipografi Inter
 - Sidebar modern dengan indikator aktif solid #1D6FF2
@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # ---------------------------------------------------------------------------
-# Palet Warna Tema Dentexa (SaaS Admin Klasik)
+# Palet Warna Utama (SaaS Admin Klasik)
 # ---------------------------------------------------------------------------
 COLOR_PRIMARY = "#1D6FF2"         # Biru solid utama (active sidebar, tombol, garis aktual)
 COLOR_PAGE_BG = "#F3F5F9"         # Background aplikasi abu muda sejuk
@@ -113,7 +113,7 @@ CUSTOM_CSS = """
         color: #111827 !important;
     }
 
-    /* Sidebar Styling Dentexa: Background #F8F9FC dengan garis batas kanan bersih */
+    /* Sidebar Styling: Background #F8F9FC dengan garis batas kanan bersih */
     [data-testid="stSidebar"] {
         background-color: #F8F9FC !important;
         border-right: 1px solid #E5E8EF !important;
@@ -218,7 +218,7 @@ CUSTOM_CSS = """
         border-color: #1D6FF2 !important;
     }
 
-    /* Segmented Control & Pills Dentexa: abu muda dengan item aktif putih bershadow */
+    /* Segmented Control & Pills: abu muda dengan item aktif putih bershadow */
     [data-testid="stSegmentedControl"], [data-testid="stPills"] {
         background-color: #F3F4F6 !important;
         padding: 3px !important;
@@ -246,7 +246,7 @@ CUSTOM_CSS = """
         font-weight: 600 !important;
     }
 
-    /* Styling Tabs: Dentexa Border Bawah Biru Aktif */
+    /* Styling Tabs: Border Bawah Biru Aktif */
     [data-testid="stTabs"] [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent !important;
@@ -271,7 +271,7 @@ CUSTOM_CSS = """
         font-weight: 600 !important;
     }
 
-    /* Kartu KPI Dentexa */
+    /* Kartu KPI */
     .kpi-card-dentexa, .kpi-card-velora {
         background-color: #FFFFFF;
         border: 1px solid #E5E8EF;
@@ -314,7 +314,7 @@ CUSTOM_CSS = """
         gap: 6px;
     }
 
-    /* Badge Pills Gaya Dentexa */
+    /* Badge Pills */
     .badge-pill-green {
         display: inline-flex;
         align-items: center;
@@ -402,7 +402,7 @@ CUSTOM_CSS = """
         font-size: 0.8rem !important;
     }
 
-    /* Tabel Dentexa (Treatments Style) */
+    /* Tabel Data (Treatments Style) */
     .dentexa-table-container {
         background-color: #FFFFFF;
         border: 1px solid #E5E8EF;
@@ -459,15 +459,15 @@ CUSTOM_CSS = """
 
 
 def apply_theme():
-    """Terapkan CSS kustom Dentexa ke halaman aktif."""
+    """Terapkan CSS kustom Smart Energy Factory ke halaman aktif."""
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Konfigurasi Styling Plotly Dentexa (Clean & Modern)
+# Konfigurasi Styling Plotly (Clean & Modern)
 # ---------------------------------------------------------------------------
 def style_plotly_fig(fig: go.Figure, height: int = 360) -> go.Figure:
-    """Modifikasi figure Plotly dengan palet Dentexa (Clean, tipis, terbaca)."""
+    """Modifikasi figure Plotly dengan palet warna bersih, tipis, terbaca."""
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="rgba(0, 0, 0, 0)",
@@ -503,7 +503,7 @@ def style_plotly_fig(fig: go.Figure, height: int = 360) -> go.Figure:
 
 
 # ---------------------------------------------------------------------------
-# Komponen Donut Chart (Gaya 'Expenses' Dentexa)
+# Komponen Donut Chart (Gaya 'Expenses' SaaS Admin)
 # ---------------------------------------------------------------------------
 def create_status_donut(
     run_pct: float,
@@ -518,7 +518,8 @@ def create_status_donut(
 ) -> go.Figure:
     """
     Membuat Donut Chart sebaran status operasional (Running, Idle, Off)
-    bergaya 'Expenses' Dentexa dengan cutout di tengah berisi total nilai dan legend di kanan.
+    dengan cutout di tengah berisi total nilai dan legend di kanan.
+    Hole = 0.76 agar anotasi teks tidak menimpa cincin.
     """
     labels = ["Running", "Idle", "Off"]
     values = [run_kwh, idle_kwh, off_kwh]
@@ -528,8 +529,8 @@ def create_status_donut(
         go.Pie(
             labels=labels,
             values=values,
-            hole=0.72,
-            domain={"x": [0.0, 0.65], "y": [0.0, 1.0]},
+            hole=0.76,
+            domain={"x": [0.0, 0.62], "y": [0.0, 1.0]},
             marker=dict(colors=colors, line=dict(color="#FFFFFF", width=2.5)),
             textinfo="none",
             hoverinfo="label+percent+value",
@@ -539,15 +540,17 @@ def create_status_donut(
         )
     )
 
-    # Tambahkan anotasi di tengah cutout donut seperti kartu Expenses Dentexa
+    # Anotasi dua baris di tengah lubang: label abu di atas, angka bold di bawah
     if total_val_str:
         fig.add_annotation(
-            text=f"<span style='font-size:10px;color:#6B7280;font-weight:600;text-transform:uppercase;'>{total_label}</span><br><b style='font-size:15px;color:#111827;font-weight:800;'>{total_val_str}</b>",
-            x=0.325,
+            text=f"<span style='font-size:9px;color:#6B7280;font-weight:600;text-transform:uppercase;'>{total_label}</span><br><b style='font-size:13px;color:#111827;font-weight:800;'>{total_val_str}</b>",
+            x=0.31,
             y=0.5,
             showarrow=False,
             align="center",
             font=dict(family="Inter, sans-serif"),
+            xanchor="center",
+            yanchor="middle",
         )
 
     fig.update_layout(
@@ -557,7 +560,7 @@ def create_status_donut(
             yanchor="middle",
             y=0.5,
             xanchor="left",
-            x=0.68,
+            x=0.65,
             font=dict(size=11, color="#111827", family="Inter, sans-serif"),
             itemwidth=30,
         ),
@@ -569,35 +572,16 @@ def create_status_donut(
     return fig
 
 
-def render_dentexa_topbar(page_title: str = "Dashboard", welcome_sub: str = "Monitoring & Efisiensi Energi Pabrik"):
+def render_dentexa_topbar(page_title: str = "Dashboard", welcome_sub: str = "Smart Energy Factory"):
     """
-    Merender Topbar Header ala Dentexa SaaS Dashboard:
-    - Kiri: Navigasi Halaman
-    - Tengah: Search Bar Pill Rounded
-    - Kanan: Quick Actions & Profile Operator
+    Merender Topbar Header SaaS Admin dengan judul halaman dan info koneksi.
+    Hanya menampilkan judul + sub-info berbasis data (tanpa elemen dekoratif).
     """
     topbar_html = "".join([
-        '<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0 16px 0; border-bottom:1px solid #E5E8EF; margin-bottom:20px;">',
-        '  <div style="display:flex; align-items:center; gap:10px;">',
-        '    <span style="font-size:12px; color:#6B7280; cursor:pointer;">&lsaquo;</span>',
-        f'    <span style="font-size:1.15rem; font-weight:700; color:#111827; letter-spacing:-0.01em;">{page_title}</span>',
-        '  </div>',
-        '  <div style="flex:1; max-width:440px; margin:0 24px;">',
-        '    <div style="display:flex; align-items:center; background:#FFFFFF; border:1px solid #E5E8EF; border-radius:30px; padding:6px 16px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">',
-        '      <span style="color:#9CA3AF; margin-right:8px; font-size:13px;">🔍</span>',
-        '      <span style="color:#9CA3AF; font-size:12px; font-weight:400;">Cari mesin, lini, atau anomali...</span>',
-        '    </div>',
-        '  </div>',
-        '  <div style="display:flex; align-items:center; gap:14px;">',
-        '    <div style="display:flex; align-items:center; justify-content:center; width:32px; height:32px; background:#111827; color:#FFFFFF; border-radius:50%; font-size:16px; font-weight:600; cursor:pointer;">+</div>',
-        '    <div style="font-size:15px; color:#6B7280; cursor:pointer;">⚡</div>',
-        '    <div style="display:flex; align-items:center; gap:8px; padding-left:8px; border-left:1px solid #E5E8EF;">',
-        '      <div style="width:32px; height:32px; border-radius:50%; background:#DBEAFE; color:#1D6FF2; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px;">OP</div>',
-        '      <div style="line-height:1.2;">',
-        '        <div style="font-size:12px; font-weight:700; color:#111827;">Tim Operator</div>',
-        '        <div style="font-size:11px; color:#6B7280;">Super Admin</div>',
-        '      </div>',
-        '    </div>',
+        '<div style="border-bottom:1px solid #E5E8EF; margin-bottom:20px; padding-bottom:14px;">',
+        '  <div style="display:flex; justify-content:space-between; align-items:baseline;">',
+        f'    <span style="font-size:1.5rem; font-weight:700; color:#111827; letter-spacing:-0.02em;">{page_title}</span>',
+        f'    <span style="font-size:0.8rem; color:#6B7280; font-weight:500;">{welcome_sub}</span>',
         '  </div>',
         '</div>',
     ])
@@ -606,7 +590,7 @@ def render_dentexa_topbar(page_title: str = "Dashboard", welcome_sub: str = "Mon
 
 def create_type_donut(type_counts: Dict[str, int], height: int = 260) -> go.Figure:
     """
-    Membuat Donut Chart sebaran kategori anomali/pemborosan Dentexa.
+    Membuat Donut Chart sebaran kategori anomali/pemborosan.
     """
     labels = [k.replace("_", " ").title() for k in type_counts.keys()]
     values = list(type_counts.values())
@@ -644,7 +628,7 @@ def create_type_donut(type_counts: Dict[str, int], height: int = 260) -> go.Figu
 
 
 # ---------------------------------------------------------------------------
-# Komponen Radial Gauge Dentexa (Biru #1D6FF2 + Track Abu Muda #E5E8EF)
+# Komponen Radial Gauge (Biru #1D6FF2 + Track Abu Muda #E5E8EF)
 # ---------------------------------------------------------------------------
 def create_radial_power_gauge(
     val: float,
@@ -657,7 +641,7 @@ def create_radial_power_gauge(
     height: int = 195,
 ) -> go.Figure:
     """
-    Membuat Radial Gauge dengan gaya modern Dentexa:
+    Membuat Radial Gauge dengan gaya modern:
     - Dial melingkar biru #1D6FF2 dengan track abu muda #E5E8EF
     - Skala 0 sampai rated_kw
     """
