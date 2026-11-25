@@ -242,14 +242,14 @@ status_badge_html = STATUS_BADGE.get(last_status, f'<span class="badge-pill-grey
 
 
 # ---------------------------------------------------------------------------
-# Kartu KPI Mesin (4 kolom dengan tinggi kartu sama, Dentexa Style)
+# Kartu KPI Mesin (4 kolom dengan tinggi kartu sama)
 # ---------------------------------------------------------------------------
 spec_c1, spec_c2, spec_c3, spec_c4 = st.columns(4)
 
 with spec_c1:
     st.markdown(
         "".join([
-            '<div class="kpi-card-dentexa" style="height:100%;">',
+            '<div class="kpi-card" style="height:100%;">',
             '<div class="kpi-label">ID &amp; Tipe Mesin</div>',
             '<div>',
             f'<span class="kpi-val" style="font-size:1.55rem;">{current_machine.get("machine_id", "-")}</span>',
@@ -264,7 +264,7 @@ with spec_c1:
 with spec_c2:
     st.markdown(
         "".join([
-            '<div class="kpi-card-dentexa" style="height:100%;">',
+            '<div class="kpi-card" style="height:100%;">',
             '<div class="kpi-label">Total Energi Terpakai</div>',
             '<div>',
             f'<span class="kpi-val">{format_id_num(total_energy_kwh, 1)}</span>',
@@ -279,7 +279,7 @@ with spec_c2:
 with spec_c3:
     st.markdown(
         "".join([
-            '<div class="kpi-card-dentexa" style="height:100%;">',
+            '<div class="kpi-card" style="height:100%;">',
             '<div class="kpi-label">Daya Rata-rata / Puncak</div>',
             '<div>',
             f'<span class="kpi-val">{format_id_num(avg_power_kw, 1)}</span>',
@@ -294,7 +294,7 @@ with spec_c3:
 with spec_c4:
     st.markdown(
         "".join([
-            '<div class="kpi-card-dentexa" style="height:100%;">',
+            '<div class="kpi-card" style="height:100%;">',
             '<div class="kpi-label">Status Terakhir (WIB)</div>',
             '<div style="display:flex;align-items:center;gap:10px;margin:4px 0;">',
             status_badge_html,
@@ -368,7 +368,7 @@ with st.container(border=True):
                     line_width=0,
                 )
 
-            # Kurva daya utama: Biru Dentexa #1D6FF2
+            # Kurva daya utama: Biru #1D6FF2
             fig.add_trace(
                 go.Scatter(
                     x=df_chart["hour_wib"],
@@ -557,9 +557,9 @@ with st.expander("Riwayat Telemetri Sensor", expanded=False):
         )
 
     table_html = "".join([
-        '<div class="dentexa-table-container">',
+        '<div class="data-table-container">',
         '<div style="overflow-x:auto;">',
-        '<table class="dentexa-table" style="table-layout:fixed; width:100%;">',
+        '<table class="data-table" style="table-layout:fixed; width:100%;">',
         '<thead>',
         '<tr>',
         '<th style="width:35%;">Waktu (WIB)</th>',

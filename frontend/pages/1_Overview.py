@@ -355,7 +355,7 @@ with row1_left:
                 label_visibility="collapsed",
             ) or "Hourly"
 
-        # Chart: Spline Line Chart Dentexa dengan Area Fill Gradien Halus
+        # Chart: Spline Line Chart biru dengan Area Fill Gradien Halus
         if hourly_total.empty:
             st.info("Tidak ada data pembacaan sensor.")
         else:
@@ -375,7 +375,7 @@ with row1_left:
 
             fig_rev = go.Figure()
 
-            # Garis spline biru Dentexa dengan area fill gradien halus
+            # Garis spline biru dengan area fill gradien halus
             fig_rev.add_trace(
                 go.Scatter(
                     x=x_vals,
@@ -681,7 +681,7 @@ with st.container(border=True):
                 row_z.append(round(ratio, 4))
             matrix_z.append(row_z)
 
-        # Skala Biru Dentexa: #EAF2FF (beban sangat rendah) ke #1D6FF2 (beban tinggi)
+        # Skala Biru: #EAF2FF (beban sangat rendah) ke #1D6FF2 (beban tinggi)
         fig_heatmap = go.Figure(
             data=go.Heatmap(
                 z=matrix_z,

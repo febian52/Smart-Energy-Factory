@@ -37,7 +37,7 @@ WIB_TZ = ZoneInfo("Asia/Jakarta")
 UTC_TZ = ZoneInfo("UTC")
 
 # ---------------------------------------------------------------------------
-# Helper: Badge severity Dentexa Style
+# Helper: Badge severity
 # ---------------------------------------------------------------------------
 SEVERITY_BADGE = {
     "low": '<span class="badge-pill-green">Low</span>',
@@ -234,12 +234,12 @@ if df_alerts.empty:
 
 
 # ---------------------------------------------------------------------------
-# 4. Tab Dentexa: Alert Aktif & Analisis
+# 4. Tab: Alert Aktif & Analisis
 # ---------------------------------------------------------------------------
 tab_aktif, tab_analisis = st.tabs(["Alert Aktif", "Analisis"])
 
 with tab_aktif:
-    # KPI Strip Ringkas Dentexa
+    # KPI Strip Ringkas
     total_alerts = len(df_alerts)
 
     if is_partial_data:
@@ -252,7 +252,7 @@ with tab_aktif:
     with k1:
         st.markdown(
             "".join([
-                '<div class="kpi-card-dentexa" style="height:100%;">',
+                '<div class="kpi-card" style="height:100%;">',
                 '<div class="kpi-label">Total Kasus Terdeteksi</div>',
                 f'<div><span class="kpi-val">{total_alerts:,}</span><span class="kpi-unit">Kasus</span></div>',
                 f'<div class="kpi-sub">{kpi_sub_total}</div>',
@@ -271,7 +271,7 @@ with tab_aktif:
 
         st.markdown(
             "".join([
-                '<div class="kpi-card-dentexa" style="height:100%;">',
+                '<div class="kpi-card" style="height:100%;">',
                 '<div class="kpi-label">Severity Tertinggi</div>',
                 f'<div><span class="kpi-val">{max_sev_str}</span></div>',
                 f'<div class="kpi-sub"><span class="{max_badge_cls}">Tingkat Risiko</span></div>',
@@ -289,7 +289,7 @@ with tab_aktif:
 
         st.markdown(
             "".join([
-                '<div class="kpi-card-dentexa" style="height:100%;">',
+                '<div class="kpi-card" style="height:100%;">',
                 '<div class="kpi-label">Mesin Paling Sering Alert</div>',
                 f'<div><span class="kpi-val">{top_mach}</span></div>',
                 f'<div class="kpi-sub"><span class="badge-pill-amber">{format_id_num(top_mach_count, 0)} Kejadian</span></div>',
@@ -319,7 +319,7 @@ with tab_aktif:
 
         st.markdown(
             "".join([
-                '<div class="kpi-card-dentexa" style="height:100%;">',
+                '<div class="kpi-card" style="height:100%;">',
                 '<div class="kpi-label">Sebaran Severity</div>',
                 '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0;">',
                 "".join(sev_pills),
@@ -384,9 +384,9 @@ with tab_aktif:
 
     tbody_html = "".join(tbody_parts)
     table_html = "".join([
-        '<div class="dentexa-table-container">',
+        '<div class="data-table-container">',
         '<div style="overflow-x:auto;">',
-        '<table class="dentexa-table">',
+        '<table class="data-table">',
         '<thead>',
         '<tr>',
         '<th style="width:170px;">Waktu (WIB)</th>',
@@ -417,7 +417,7 @@ with tab_analisis:
     # ---------------------------------------------------------------------------
     vis_c1, vis_c2 = st.columns([1.1, 1.5])
 
-    # --- Bar chart: Alert per Mesin (Gaya Financial Overview Dentexa) ---
+    # --- Bar chart: Alert per Mesin ---
     with vis_c1:
         with st.container(border=True):
             st.markdown(
@@ -567,7 +567,7 @@ with tab_analisis:
                 with cols[col_idx]:
                     st.markdown(
                         "".join([
-                            '<div class="kpi-card-dentexa" style="margin-bottom:10px;">',
+                            '<div class="kpi-card" style="margin-bottom:10px;">',
                             '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">',
                             f'<span style="font-weight:700; font-size:0.88rem; color:#111827;">{meta["title"]}</span>',
                             f'<span class="badge-pill-blue">{format_id_num(cnt, 0)} Kasus</span>',

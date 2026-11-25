@@ -59,7 +59,7 @@ def format_id_currency(val: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Injeksi CSS Kustom: Dentexa Design System
+# Injeksi CSS Kustom: SaaS Admin Light Design System
 # ---------------------------------------------------------------------------
 CUSTOM_CSS = """
 <style>
@@ -272,7 +272,7 @@ CUSTOM_CSS = """
     }
 
     /* Kartu KPI */
-    .kpi-card-dentexa, .kpi-card-velora {
+    .kpi-card, .kpi-card-velora {
         background-color: #FFFFFF;
         border: 1px solid #E5E8EF;
         border-radius: 14px;
@@ -281,7 +281,7 @@ CUSTOM_CSS = """
         position: relative;
     }
 
-    .kpi-card-dentexa .kpi-label, .kpi-card-velora .kpi-label {
+    .kpi-card .kpi-label, .kpi-card-velora .kpi-label {
         font-size: 0.76rem;
         font-weight: 600;
         color: #6B7280;
@@ -290,7 +290,7 @@ CUSTOM_CSS = """
         margin-bottom: 6px;
     }
 
-    .kpi-card-dentexa .kpi-val, .kpi-card-velora .kpi-val {
+    .kpi-card .kpi-val, .kpi-card-velora .kpi-val {
         font-size: 1.85rem;
         font-weight: 700;
         color: #111827;
@@ -298,14 +298,14 @@ CUSTOM_CSS = """
         line-height: 1.15;
     }
 
-    .kpi-card-dentexa .kpi-unit, .kpi-card-velora .kpi-unit {
+    .kpi-card .kpi-unit, .kpi-card-velora .kpi-unit {
         font-size: 0.95rem;
         font-weight: 500;
         color: #6B7280;
         margin-left: 4px;
     }
 
-    .kpi-card-dentexa .kpi-sub, .kpi-card-velora .kpi-sub {
+    .kpi-card .kpi-sub, .kpi-card-velora .kpi-sub {
         margin-top: 8px;
         font-size: 0.8rem;
         color: #6B7280;
@@ -402,8 +402,8 @@ CUSTOM_CSS = """
         font-size: 0.8rem !important;
     }
 
-    /* Tabel Data (Treatments Style) */
-    .dentexa-table-container {
+    /* Tabel Data */
+    .data-table-container {
         background-color: #FFFFFF;
         border: 1px solid #E5E8EF;
         border-radius: 14px;
@@ -411,14 +411,14 @@ CUSTOM_CSS = """
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
 
-    .dentexa-table {
+    .data-table {
         width: 100%;
         border-collapse: collapse;
         font-size: 13px;
         text-align: left;
     }
 
-    .dentexa-table thead tr {
+    .data-table thead tr {
         background-color: #F8F9FC;
         border-bottom: 1px solid #E5E8EF;
         color: #6B7280;
@@ -428,18 +428,18 @@ CUSTOM_CSS = """
         letter-spacing: 0.05em;
     }
 
-    .dentexa-table th {
+    .data-table th {
         padding: 10px 14px;
     }
 
-    .dentexa-table td {
+    .data-table td {
         padding: 12px 14px;
         border-bottom: 1px solid #F3F4F6;
         color: #111827;
         vertical-align: top;
     }
 
-    .dentexa-table tbody tr:hover {
+    .data-table tbody tr:hover {
         background-color: #F9FAFB;
     }
 
@@ -572,7 +572,7 @@ def create_status_donut(
     return fig
 
 
-def render_dentexa_topbar(page_title: str = "Dashboard", welcome_sub: str = "Smart Energy Factory"):
+def render_page_topbar(page_title: str = "Dashboard", welcome_sub: str = "Smart Energy Factory"):
     """
     Merender Topbar Header SaaS Admin dengan judul halaman dan info koneksi.
     Hanya menampilkan judul + sub-info berbasis data (tanpa elemen dekoratif).

@@ -223,7 +223,7 @@ kpi_c1, kpi_c2, kpi_c3 = st.columns(3)
 
 with kpi_c1:
     card1_html = "".join([
-        '<div class="kpi-card-dentexa" style="height:100%;">',
+        '<div class="kpi-card" style="height:100%;">',
         f'<div class="kpi-label">Total Prediksi Energi {mock_badge}</div>',
         '<div>',
         f'<span class="kpi-val">{format_id_num(total_pred_kwh, 1)}</span>',
@@ -238,7 +238,7 @@ with kpi_c1:
 
 with kpi_c2:
     card2_html = "".join([
-        '<div class="kpi-card-dentexa" style="height:100%;">',
+        '<div class="kpi-card" style="height:100%;">',
         '<div class="kpi-label">Jam Puncak Prediksi (WIB)</div>',
         '<div>',
         f'<span class="kpi-val" style="font-size:1.35rem;">{peak_time_str}</span>',
@@ -252,7 +252,7 @@ with kpi_c2:
 
 with kpi_c3:
     card3_html = "".join([
-        '<div class="kpi-card-dentexa" style="height:100%;">',
+        '<div class="kpi-card" style="height:100%;">',
         '<div class="kpi-label">Estimasi Biaya Prediksi</div>',
         '<div>',
         f'<span class="kpi-val">{format_id_currency(cost_pred)}</span>',
@@ -286,7 +286,7 @@ else:
     pred_plot_x = pred_x
     pred_plot_y = pred_y
 
-# 1. Garis Aktual: Biru Solid Dentexa #1D6FF2
+# 1. Garis Aktual: Biru Solid #1D6FF2
 if not df_actual_hourly.empty:
     fig.add_trace(
         go.Scatter(
