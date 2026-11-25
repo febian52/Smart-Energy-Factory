@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 
 import pandas as pd
@@ -131,35 +132,47 @@ utc_end   = wib_end.astimezone(UTC_TZ).replace(tzinfo=None)
 
 
 # ---------------------------------------------------------------------------
-# 3. Ambil Data Alert dari API (dengan Cache & Timeout 45s per Request)
+# 3. Ambil Data Alert dari API (Paralel, Cache & Timeout 45s per Request)
 # ---------------------------------------------------------------------------
 @st.cache_data(ttl=600, show_spinner=False)
-def fetch_waste_alerts_cached(mid: str, s_iso: str, e_iso: str) -> dict:
+def load_waste_alerts_parallel(target_machines_tuple: tuple[str, ...], s_iso: str, e_iso: str):
     s = datetime.fromisoformat(s_iso) if s_iso else None
     e = datetime.fromisoformat(e_iso) if e_iso else None
-    return get_waste_alerts(mid, start=s, end=e, timeout=45)
+
+    all_alerts: list[dict] = []
+    is_mock_flag = False
+    failed_machines: list[str] = []
+    success_machines: list[str] = []
+
+    def _fetch_one(mid: str) -> tuple[str, dict]:
+        res = get_waste_alerts(mid, start=s, end=e, timeout=45)
+        return mid, res
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs = {ex.submit(_fetch_one, mid): mid for mid in target_machines_tuple}
+        for fut in as_completed(futs):
+            mid = futs[fut]
+            try:
+                _, res = fut.result()
+                alerts = res.get("alerts", [])
+                all_alerts.extend(alerts)
+                success_machines.append(mid)
+                if res.get("is_mock"):
+                    is_mock_flag = True
+            except Exception as exc:
+                failed_machines.append(f"{mid} ({exc})")
+
+    return all_alerts, is_mock_flag, failed_machines, success_machines
 
 
 target_machines = [m["machine_id"] for m in machines] if sel_machine == "Semua Mesin" else [sel_machine]
 
-all_alerts: list[dict] = []
-is_mock_flag = False
-failed_machines: list[str] = []
-success_machines: list[str] = []
-
 with st.spinner("Memuat data peringatan pemborosan (waste alerts)..."):
-    for mid in target_machines:
-        try:
-            res = fetch_waste_alerts_cached(mid, utc_start.isoformat(), utc_end.isoformat())
-            alerts = res.get("alerts", [])
-            all_alerts.extend(alerts)
-            success_machines.append(mid)
-            if res.get("is_mock"):
-                is_mock_flag = True
-        except RuntimeError as exc:
-            failed_machines.append(f"{mid} ({exc})")
-        except Exception as exc:
-            failed_machines.append(f"{mid} ({exc})")
+    all_alerts, is_mock_flag, failed_machines, success_machines = load_waste_alerts_parallel(
+        tuple(target_machines),
+        utc_start.isoformat(),
+        utc_end.isoformat(),
+    )
 
 # Konversi ke DataFrame sebelum render filter severity dinamis
 if all_alerts:
