@@ -1,5 +1,6 @@
 import sys
 import json
+import re
 from pathlib import Path
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -17,11 +18,35 @@ for p in (str(CURRENT_DIR.parent), str(ROOT_DIR)):
         sys.path.insert(0, p)
 
 try:
-    from frontend.api_client import get_machines, get_waste_alerts, get_data_range
-    from frontend.ui import apply_theme, style_plotly_fig, create_type_donut, format_id_num
+    from frontend.api_client import (
+        get_machines,
+        get_waste_alerts,
+        get_data_range,
+        get_energy,
+        TARIF_PER_KWH,
+    )
+    from frontend.ui import (
+        apply_theme,
+        style_plotly_fig,
+        create_type_donut,
+        format_id_num,
+        format_id_currency,
+    )
 except ImportError:
-    from api_client import get_machines, get_waste_alerts, get_data_range
-    from ui import apply_theme, style_plotly_fig, create_type_donut, format_id_num
+    from api_client import (
+        get_machines,
+        get_waste_alerts,
+        get_data_range,
+        get_energy,
+        TARIF_PER_KWH,
+    )
+    from ui import (
+        apply_theme,
+        style_plotly_fig,
+        create_type_donut,
+        format_id_num,
+        format_id_currency,
+    )
 
 try:
     st.set_page_config(
@@ -166,6 +191,39 @@ def load_waste_alerts_parallel(target_machines_tuple: tuple[str, ...], s_iso: st
     return all_alerts, is_mock_flag, failed_machines, success_machines
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def load_alert_energy_parallel(target_machines_tuple: tuple[str, ...], s_iso: str, e_iso: str):
+    """Ambil energi per interval untuk mesin yang punya alert (paralel).
+
+    Hanya dipakai untuk mencocokkan timestamp alert dengan `energy_kwh` aktual.
+    Jika gagal/kosong, pemanggil akan memakai estimasi dari daya sesaat.
+    """
+    s = datetime.fromisoformat(s_iso)
+    e = datetime.fromisoformat(e_iso)
+    out: list[tuple[str, str, float]] = []
+
+    def _fetch_one(mid: str):
+        rows = get_energy(mid, start=s, end=e, limit=10_000, page_all=True, timeout=45)
+        return mid, rows
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs = {ex.submit(_fetch_one, mid): mid for mid in target_machines_tuple}
+        for fut in as_completed(futs):
+            mid = futs[fut]
+            try:
+                _, rows = fut.result()
+            except Exception:
+                continue
+            for r in rows or []:
+                ts = r.get("timestamp")
+                kwh = r.get("energy_kwh")
+                if ts is None or kwh is None:
+                    continue
+                out.append((mid, str(ts), float(kwh)))
+
+    return out
+
+
 target_machines = [m["machine_id"] for m in machines] if sel_machine == "Semua Mesin" else [sel_machine]
 
 with st.spinner("Memuat data peringatan pemborosan (waste alerts)..."):
@@ -245,6 +303,62 @@ if df_alerts.empty:
         unsafe_allow_html=True,
     )
     st.stop()
+
+
+# ---------------------------------------------------------------------------
+# 3b. Estimasi energi & biaya pada interval anomali
+# ---------------------------------------------------------------------------
+def _to_naive_utc(series: pd.Series) -> pd.Series:
+    """Timestamp -> naive UTC, agar bisa dicocokkan dengan respons /energy."""
+    return pd.to_datetime(series, utc=True).dt.tz_localize(None)
+
+
+_alert_ts_naive = _to_naive_utc(df_alerts["timestamp"])
+_energy_map: dict[tuple[str, pd.Timestamp], float] = {}
+_alert_machines = tuple(sorted(df_alerts["machine_id"].astype(str).unique()))
+_span_days = (_alert_ts_naive.max() - _alert_ts_naive.min()).total_seconds() / 86400
+
+# Batas aman: rentang sangat panjang pakai fallback (tanpa request energi tambahan).
+if _alert_machines and _span_days <= 45:
+    _q_start = (_alert_ts_naive.min() - timedelta(minutes=5)).to_pydatetime()
+    _q_end = (_alert_ts_naive.max() + timedelta(minutes=5)).to_pydatetime()
+    with st.spinner("Menghitung energi pada interval anomali..."):
+        _energy_rows = load_alert_energy_parallel(
+            _alert_machines, _q_start.isoformat(), _q_end.isoformat()
+        )
+    for _mid, _ts, _kwh in _energy_rows:
+        _key_ts = pd.Timestamp(_ts)
+        if _key_ts.tzinfo is not None:
+            _key_ts = _key_ts.tz_convert("UTC").tz_localize(None)
+        _energy_map[(_mid, _key_ts)] = _kwh
+
+
+_energy_source: list[str] = []
+
+
+def _row_energy_kwh(row) -> float:
+    """Energi aktual per alert; fallback daya sesaat x interval 5 menit."""
+    actual = _energy_map.get((str(row["machine_id"]), row["_ts_naive"]))
+    if actual is not None:
+        _energy_source.append("actual")
+        return float(actual)
+    match = re.search(r"([\d.]+)\s*kW", str(row.get("note", "")))
+    if match:
+        _energy_source.append("fallback")
+        return float(match.group(1)) * (5.0 / 60.0)
+    _energy_source.append("unknown")
+    return 0.0
+
+
+df_alerts["_ts_naive"] = _alert_ts_naive
+df_alerts["energy_kwh_alert"] = df_alerts.apply(_row_energy_kwh, axis=1)
+df_alerts["cost_rp_alert"] = df_alerts["energy_kwh_alert"] * TARIF_PER_KWH
+df_alerts = df_alerts.drop(columns=["_ts_naive"])
+
+alert_energy_kwh = float(df_alerts["energy_kwh_alert"].sum())
+alert_cost_rp = float(df_alerts["cost_rp_alert"].sum())
+alert_energy_matched = _energy_source.count("actual")
+alert_energy_total = int(len(df_alerts))
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +458,51 @@ with tab_aktif:
             unsafe_allow_html=True,
         )
 
+    # --- Estimasi energi & biaya pada interval anomali ---
+    if alert_energy_kwh > 0:
+        st.markdown("<div style='margin:14px 0 0 0;'></div>", unsafe_allow_html=True)
+        k_energy, k_cost = st.columns(2)
+
+        with k_energy:
+            st.markdown(
+                "".join([
+                    '<div class="kpi-card" style="height:100%;">',
+                    '<div class="kpi-label">Energi pada Interval Anomali</div>',
+                    f'<div><span class="kpi-val">{format_id_num(alert_energy_kwh, 1)}</span><span class="kpi-unit">kWh</span></div>',
+                    f'<div class="kpi-sub"><span class="badge-pill-blue">{format_id_num(alert_energy_total, 0)} kasus</span></div>',
+                    '</div>',
+                ]),
+                unsafe_allow_html=True,
+            )
+
+        with k_cost:
+            st.markdown(
+                "".join([
+                    '<div class="kpi-card" style="height:100%;">',
+                    '<div class="kpi-label">Estimasi Biaya Energi Anomali</div>',
+                    f'<div><span class="kpi-val" style="font-size:1.6rem; white-space:nowrap;">{format_id_currency(alert_cost_rp)}</span></div>',
+                    f'<div class="kpi-sub"><span class="badge-pill-amber">Tarif {format_id_currency(TARIF_PER_KWH)}/kWh</span></div>',
+                    '</div>',
+                ]),
+                unsafe_allow_html=True,
+            )
+
+        _fallback_note = ""
+        if alert_energy_matched < alert_energy_total:
+            _fallback_note = (
+                f" {format_id_num(alert_energy_total - alert_energy_matched, 0)} kasus diestimasi "
+                f"dari daya sesaat × interval 5 menit."
+            )
+        st.caption(
+            "Estimasi dihitung dari konsumsi listrik pada interval yang ditandai anomali, "
+            "bukan selisih terhadap baseline normal." + _fallback_note
+        )
+    else:
+        st.caption(
+            "ℹ️ Estimasi energi & biaya belum tersedia untuk data ini "
+            "(field energi/daya tidak ditemukan pada respons alert)."
+        )
+
     st.markdown("<div style='margin:1.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
 
     # Tabel Alert HTML (Max 100 Baris) + Unduh CSV
@@ -359,8 +518,23 @@ with tab_aktif:
 
     with tbl_btn:
         csv_buf = io.StringIO()
-        export_df = df_alerts[["timestamp_wib", "machine_id", "type", "severity", "note"]].copy()
+        export_df = df_alerts[
+            [
+                "timestamp_wib",
+                "machine_id",
+                "type",
+                "severity",
+                "energy_kwh_alert",
+                "cost_rp_alert",
+                "note",
+            ]
+        ].copy()
         export_df["timestamp_wib"] = export_df["timestamp_wib"].dt.strftime("%Y-%m-%d %H:%M WIB")
+        export_df = export_df.rename(
+            columns={"energy_kwh_alert": "energy_kwh", "cost_rp_alert": "estimasi_biaya_rp"}
+        )
+        export_df["energy_kwh"] = export_df["energy_kwh"].round(3)
+        export_df["estimasi_biaya_rp"] = export_df["estimasi_biaya_rp"].round(0).astype(int)
         export_df.to_csv(csv_buf, index=False)
         st.download_button(
             label="⬇ Unduh Semua CSV",

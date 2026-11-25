@@ -305,7 +305,7 @@ st.markdown(
         <div style="font-size: 13px; font-weight: 500; color: #6B7280;">
             {lines_str} &middot; Periode Data: <b style="color:#111827;">{period_str}</b>
             <span style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:#ECFDF5; border:1px solid #D1FAE5; color:#047857; font-size:11px; font-weight:600; white-space:nowrap;">
-                &#9679; Data terakhir: {default_end_wib.strftime('%d %b %Y, %H:%M WIB')}
+                &#9679; Data terakhir (dataset simulasi): {default_end_wib.strftime('%d %b %Y, %H:%M WIB')}
             </span>
         </div>
     </div>
