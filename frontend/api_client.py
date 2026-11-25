@@ -327,6 +327,8 @@ def get_energy(
     GET /energy
     machine_id wajib; start & end selalu dikirim; limit per request max 10 000.
     Jika limit > 10.000 atau page_all=True, lakukan paging timestamp otomatis.
+    page_all=True mengambil seluruh rentang (batas aman 200.000 baris), bukan
+    berhenti di nilai `limit` yang dikirim pemanggil.
 
     Setiap item: machine_id, timestamp, power_kw, energy_kwh,
                  voltage, current, status
@@ -346,11 +348,14 @@ def get_energy(
         }
         return _get("/energy", params=params, timeout=timeout)  # type: ignore[return-value]
 
-    # Timestamp-based paging jika meminta lebih dari batas keras 10.000 baris
+    # Timestamp-based paging jika meminta lebih dari batas keras 10.000 baris.
+    # page_all=True mengambil seluruh rentang (dengan batas aman 200.000 baris),
+    # bukan berhenti di nilai `limit` yang dikirim pemanggil.
     all_rows: list[dict] = []
     cur_start = start
-    while True:
-        chunk_limit = min(10_000, limit - len(all_rows))
+    max_rows = 200_000 if page_all else limit
+    while len(all_rows) < max_rows:
+        chunk_limit = min(10_000, max_rows - len(all_rows))
         params = {
             "machine_id": machine_id,
             "start": cur_start.isoformat(),
@@ -361,7 +366,7 @@ def get_energy(
         if not raw or not isinstance(raw, list):
             break
         all_rows.extend(raw)
-        if len(raw) < chunk_limit or len(all_rows) >= limit:
+        if len(raw) < chunk_limit:
             break
         last_dt = datetime.fromisoformat(raw[-1]["timestamp"])
         cur_start = last_dt + timedelta(seconds=1)

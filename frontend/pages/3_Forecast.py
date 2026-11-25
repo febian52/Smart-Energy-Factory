@@ -189,7 +189,7 @@ if not _required_cols.issubset(df_preds.columns):
     _missing = _required_cols - set(df_preds.columns)
     st.error(
         f"🚨 **Format respons /forecast berubah — field hilang: `{_missing}`.**\n\n"
-        "Hubungi tim backend (Didi) untuk memastikan kolom `forecast_time` dan `predicted_kwh` tersedia.",
+        "Hubungi tim backend untuk memastikan kolom `forecast_time` dan `predicted_kwh` tersedia.",
         icon="🚫",
     )
     st.stop()

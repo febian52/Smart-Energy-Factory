@@ -304,6 +304,9 @@ st.markdown(
         </h1>
         <div style="font-size: 13px; font-weight: 500; color: #6B7280;">
             {lines_str} &middot; Periode Data: <b style="color:#111827;">{period_str}</b>
+            <span style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:#ECFDF5; border:1px solid #D1FAE5; color:#047857; font-size:11px; font-weight:600; white-space:nowrap;">
+                &#9679; Data terakhir: {default_end_wib.strftime('%d %b %Y, %H:%M WIB')}
+            </span>
         </div>
     </div>
     """,
@@ -339,6 +342,10 @@ with row1_left:
                         <div style="margin-left: 6px;">
                             {delta_html}
                         </div>
+                    </div>
+                    <div style="font-size: 12px; color: #6B7280; font-weight: 500; margin-top: 6px;">
+                        Estimasi biaya listrik: <b style="color: #111827;">{format_id_currency(cost_rp)}</b>
+                        <span style="color: #9CA3AF;">&middot; tarif {format_id_currency(TARIF_PER_KWH)}/kWh</span>
                     </div>
                 </div>
                 """,
