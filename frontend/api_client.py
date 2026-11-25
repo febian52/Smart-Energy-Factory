@@ -219,15 +219,19 @@ def _normalize_forecast(raw, machine_id: str, hours_ahead: int) -> dict:
     for item in preds:
         if not isinstance(item, dict):
             continue
-        # Coba berbagai alias nama kolom dari backend
-        ft = (item.get("forecast_time")
-              or item.get("time")
-              or item.get("timestamp")
-              or item.get("datetime"))
-        kwh = (item.get("predicted_kwh")
-               or item.get("energy_kwh")
-               or item.get("value")
-               or item.get("kWh"))
+        # Coba berbagai alias nama kolom dari backend secara aman (jangan pakai 'or' agar 0.0 tidak dianggap falsy)
+        ft = None
+        for k in ("forecast_time", "time", "timestamp", "datetime"):
+            if k in item and item[k] is not None:
+                ft = item[k]
+                break
+
+        kwh = None
+        for k in ("predicted_kwh", "energy_kwh", "value", "kWh"):
+            if k in item and item[k] is not None:
+                kwh = item[k]
+                break
+
         if ft is None or kwh is None:
             continue
         normalized.append({"forecast_time": str(ft), "predicted_kwh": float(kwh)})

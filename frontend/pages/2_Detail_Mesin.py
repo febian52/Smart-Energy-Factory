@@ -23,6 +23,7 @@ try:
     from frontend.ui import (
         apply_theme,
         style_plotly_fig,
+        format_id_num,
     )
 except ImportError:
     from api_client import (
@@ -34,6 +35,7 @@ except ImportError:
     from ui import (
         apply_theme,
         style_plotly_fig,
+        format_id_num,
     )
 
 try:
@@ -261,10 +263,10 @@ with spec_c2:
             '<div class="kpi-card-velora" style="height:100%;">',
             '<div class="kpi-label">Total Energi Terpakai</div>',
             '<div>',
-            f'<span class="kpi-val">{total_energy_kwh:,.1f}</span>',
+            f'<span class="kpi-val">{format_id_num(total_energy_kwh, 1)}</span>',
             '<span class="kpi-unit">kWh</span>',
             '</div>',
-            f'<div class="kpi-sub"><span class="badge-pill-green">Akumulasi {total_duration_hours:.1f} jam</span> <span style="color:#8C827A;font-size:11px;">({total_readings:,} data)</span></div>',
+            f'<div class="kpi-sub"><span class="badge-pill-green">Akumulasi {format_id_num(total_duration_hours, 1)} jam</span> <span style="color:#8C827A;font-size:11px;">({total_readings:,} data)</span></div>'.replace(',', '.'),
             '</div>',
         ]),
         unsafe_allow_html=True,
@@ -276,10 +278,10 @@ with spec_c3:
             '<div class="kpi-card-velora" style="height:100%;">',
             '<div class="kpi-label">Daya Rata-rata / Puncak</div>',
             '<div>',
-            f'<span class="kpi-val">{avg_power_kw:.1f}</span>',
+            f'<span class="kpi-val">{format_id_num(avg_power_kw, 1)}</span>',
             '<span class="kpi-unit">kW</span>',
             '</div>',
-            f'<div class="kpi-sub"><span class="badge-pill-orange">Puncak {peak_power_kw:.1f} kW</span> <span style="color:#6B6259;font-size:12px;">/ Rated {rated_kw:.0f} kW</span></div>',
+            f'<div class="kpi-sub"><span class="badge-pill-orange">Puncak {format_id_num(peak_power_kw, 1)} kW</span> <span style="color:#6B6259;font-size:12px;">/ Rated {format_id_num(rated_kw, 0)} kW</span></div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
@@ -293,7 +295,7 @@ with spec_c4:
             '<div style="display:flex;align-items:center;gap:10px;margin:4px 0;">',
             status_badge_html,
             '</div>',
-            f'<div class="kpi-sub" style="color:#6B6259;font-size:12px;">{last_ts_wib} WIB · {running_hours:.1f}j Running / {idle_hours:.1f}j Idle</div>',
+            f'<div class="kpi-sub" style="color:#6B6259;font-size:12px;">{last_ts_wib} WIB · {format_id_num(running_hours, 1)}j Running / {format_id_num(idle_hours, 1)}j Idle</div>',
             '</div>',
         ]),
         unsafe_allow_html=True,
@@ -311,7 +313,7 @@ with st.container(border=True):
         '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">',
         '<div>',
         f'<h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Profil Beban Daya - {selected_machine_id}</h3>',
-        f'<div style="font-size:12px; color:#6B6259; font-weight:600;">{current_machine.get("name", "")} · Kapasitas Rated {rated_kw:.0f} kW</div>',
+        f'<div style="font-size:12px; color:#6B6259; font-weight:600;">{current_machine.get("name", "")} · Kapasitas Rated {format_id_num(rated_kw, 0)} kW</div>',
         '</div>',
         '<div style="display:flex; gap:16px; font-size:12px; font-weight:600;">',
         '<span style="display:flex; align-items:center; gap:5px; color:#E8590C;"><span style="width:12px; height:3px; background:#E8590C; border-radius:2px;"></span> Beban Daya (kW)</span>',

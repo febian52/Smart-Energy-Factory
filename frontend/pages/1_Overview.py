@@ -26,6 +26,8 @@ try:
     from frontend.ui import (
         apply_theme,
         style_plotly_fig,
+        format_id_num,
+        format_id_currency,
     )
 except ImportError:
     from api_client import (
@@ -39,6 +41,8 @@ except ImportError:
     from ui import (
         apply_theme,
         style_plotly_fig,
+        format_id_num,
+        format_id_currency,
     )
 
 try:
@@ -55,21 +59,6 @@ apply_theme()
 
 WIB_TZ = ZoneInfo("Asia/Jakarta")
 UTC_TZ = ZoneInfo("UTC")
-
-
-# ---------------------------------------------------------------------------
-# Helper Pemformat Angka Gaya Indonesia
-# ---------------------------------------------------------------------------
-def format_id_num(val: float, decimals: int = 1) -> str:
-    """Format angka ribuan titik dan desimal koma (misal: 3.569,5)."""
-    s = f"{val:,.{decimals}f}"
-    return s.replace(",", "_").replace(".", ",").replace("_", ".")
-
-
-def format_id_currency(val: float) -> str:
-    """Format mata uang Rupiah bulat (misal: Rp 5.354.250)."""
-    s = f"{round(val):,}"
-    return f"Rp {s.replace(',', '.')}"
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +254,7 @@ if all_readings:
             delta_badge_class = "badge-pill-green" if delta_val <= 0 else "badge-pill-orange"
             last_date_str = last_complete_date.strftime("%d %b")
             prev_date_str = prev_complete_date.strftime("%d %b")
-            delta_html = f'<span class="{delta_badge_class}">{delta_prefix}{delta_val:.1f}%</span> <span style="color:#6B6259; font-weight:500; font-size:12px;">({last_date_str} vs {prev_date_str})</span>'
+            delta_html = f'<span class="{delta_badge_class}">{delta_prefix}{format_id_num(delta_val, 1)}%</span> <span style="color:#6B6259; font-weight:500; font-size:12px;">({last_date_str} vs {prev_date_str})</span>'
         else:
             delta_html = '<span style="color:#6B6259; font-size:12px;">—</span>'
     else:
@@ -353,11 +342,11 @@ with kpi_c2:
         <div class="kpi-card-velora" style="height:100%;">
             <div class="kpi-label">Daya total jam terakhir data</div>
             <div>
-                <span class="kpi-val">{cur_power:.1f}</span>
+                <span class="kpi-val">{format_id_num(cur_power, 1)}</span>
                 <span class="kpi-unit">kW</span>
             </div>
             <div class="kpi-sub">
-                <span style="color:#6B6259; font-weight:600; font-size:12px;">Rata-rata periode: <b>{avg_power:.1f} kW</b></span>
+                <span style="color:#6B6259; font-weight:600; font-size:12px;">Rata-rata periode: <b>{format_id_num(avg_power, 1)} kW</b></span>
             </div>
         </div>
         """,
@@ -373,7 +362,7 @@ with kpi_c3:
                 <span class="kpi-val">{format_id_currency(cost_rp)}</span>
             </div>
             <div class="kpi-sub">
-                <span class="badge-pill-orange">⚡ Tarif Rp {TARIF_PER_KWH:,}</span>
+                <span class="badge-pill-orange">⚡ Tarif {format_id_currency(TARIF_PER_KWH)}</span>
                 <span style="color:#6B6259; font-weight:500; font-size:12px;">per kWh</span>
             </div>
         </div>
@@ -462,7 +451,7 @@ with col_mid_right:
             <div style="margin-bottom:4px;">
                 <div style="font-weight:800; font-size:1.15rem; color:#1F1A17; margin-bottom:4px;">Power Meter</div>
                 <div style="font-size:12px; color:#6B6259; font-weight:600; margin-bottom:2px;">
-                    Total Daya Seluruh Mesin (Kapasitas: {total_rated_kw:.1f} kW)
+                    Total Daya Seluruh Mesin (Kapasitas: {format_id_num(total_rated_kw, 1)} kW)
                 </div>
                 <div style="font-size:11px; color:#8C827A;">
                     Jam terakhir data: {last_hour_str}
@@ -518,17 +507,17 @@ with col_mid_right:
             <div style="display:flex; justify-content:space-around; text-align:center; padding:8px 0; border-top:1px solid #EFE5D6; margin-top:-8px; margin-bottom:12px;">
                 <div>
                     <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Min</div>
-                    <div style="font-size:14px; font-weight:700; color:#1F1A17;">{min_power:.1f} <span style="font-size:12px;">kW</span></div>
+                    <div style="font-size:14px; font-weight:700; color:#1F1A17;">{format_id_num(min_power, 1)} <span style="font-size:12px;">kW</span></div>
                 </div>
                 <div style="border-right:1px solid #EFE5D6;"></div>
                 <div>
                     <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Max</div>
-                    <div style="font-size:14px; font-weight:700; color:#E8590C;">{max_power:.1f} <span style="font-size:12px;">kW</span></div>
+                    <div style="font-size:14px; font-weight:700; color:#E8590C;">{format_id_num(max_power, 1)} <span style="font-size:12px;">kW</span></div>
                 </div>
                 <div style="border-right:1px solid #EFE5D6;"></div>
                 <div>
                     <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Rata-rata</div>
-                    <div style="font-size:14px; font-weight:700; color:#1F1A17;">{avg_power:.1f} <span style="font-size:12px;">kW</span></div>
+                    <div style="font-size:14px; font-weight:700; color:#1F1A17;">{format_id_num(avg_power, 1)} <span style="font-size:12px;">kW</span></div>
                 </div>
             </div>
 
@@ -536,7 +525,7 @@ with col_mid_right:
                 <div>
                     <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
                         <span style="color:#6B6259;">Konsumsi Beban Running</span>
-                        <span style="color:#16A34A; font-weight:700;">{pct_run_val:.1f}% ({run_kwh:,.1f} kWh)</span>
+                        <span style="color:#16A34A; font-weight:700;">{format_id_num(pct_run_val, 1)}% ({format_id_num(run_kwh, 1)} kWh)</span>
                     </div>
                     <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
                         <div style="background:#16A34A; width:{pct_run_val:.1f}%; height:100%; border-radius:4px;"></div>
@@ -545,7 +534,7 @@ with col_mid_right:
                 <div>
                     <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
                         <span style="color:#6B6259;">Konsumsi Beban Standby (Idle)</span>
-                        <span style="color:#F2C230; font-weight:700;">{pct_idle_val:.1f}% ({idle_kwh:,.1f} kWh)</span>
+                        <span style="color:#F2C230; font-weight:700;">{format_id_num(pct_idle_val, 1)}% ({format_id_num(idle_kwh, 1)} kWh)</span>
                     </div>
                     <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
                         <div style="background:#F2C230; width:{pct_idle_val:.1f}%; height:100%; border-radius:4px;"></div>
@@ -554,7 +543,7 @@ with col_mid_right:
                 <div>
                     <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
                         <span style="color:#6B6259;">Kondisi Mesin Mati (Off)</span>
-                        <span style="color:#8C827A; font-weight:700;">{pct_off_val:.1f}% ({off_kwh:,.1f} kWh)</span>
+                        <span style="color:#8C827A; font-weight:700;">{format_id_num(pct_off_val, 1)}% ({format_id_num(off_kwh, 1)} kWh)</span>
                     </div>
                     <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
                         <div style="background:#C4B5A5; width:{pct_off_val:.1f}%; height:100%; border-radius:4px;"></div>
@@ -622,7 +611,7 @@ with b_c2:
                 <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
                     <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
                         <span style="color:#6B6259;">Tingkat Utilisasi Daya</span>
-                        <span style="font-weight:700; color:#1F1A17;">{utilisasi_pct:.1f}%</span>
+                        <span style="font-weight:700; color:#1F1A17;">{format_id_num(utilisasi_pct, 1)}%</span>
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
                         <span style="color:#6B6259;">Jumlah Mesin Terdaftar</span>
@@ -630,7 +619,7 @@ with b_c2:
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
                         <span style="color:#6B6259;">Total Kapasitas Terpasang</span>
-                        <span style="font-weight:700; color:#1F1A17;">{total_rated_kw:.1f} kW</span>
+                        <span style="font-weight:700; color:#1F1A17;">{format_id_num(total_rated_kw, 1)} kW</span>
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:13px;">
                         <span style="color:#6B6259;">Total Konsumsi 7 Hari</span>
