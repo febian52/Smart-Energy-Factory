@@ -333,21 +333,23 @@ if last_actual_time is not None:
         text="Batas Aktual / Mulai Prediksi",
         showarrow=False,
         xanchor="right",
-        yanchor="bottom",
-        font=dict(size=11, color="#6B7280"),
+        yanchor="top",
+        font=dict(size=12, color="#6B7280"),
+        bgcolor="rgba(255, 255, 255, 0.8)",
+        borderpad=4,
     )
 
 style_plotly_fig(fig, height=360)
 fig.update_layout(
     legend=dict(
         orientation="h",
-        yanchor="bottom",
-        y=1.02,
-        xanchor="right",
-        x=1,
+        x=0.5,
+        xanchor="center",
+        yanchor="top",
+        y=-0.12,
         font=dict(size=11, color="#6B7280"),
     ),
-    margin=dict(l=20, r=20, t=30, b=30),
+    margin=dict(l=20, r=20, t=50, b=60),
     hovermode="x unified",
 )
 fig.update_xaxes(

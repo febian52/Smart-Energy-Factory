@@ -454,14 +454,20 @@ with tab_analisis:
                     ),
                     text=mach_counts["count"],
                     textposition="outside",
+                    cliponaxis=False,
                     textfont=dict(size=11, color="#111827", family="Inter, sans-serif"),
                     hovertemplate="<b>Mesin %{y}</b><br>Total Alert: %{x:,} kasus<extra></extra>",
                 )
             )
             style_plotly_fig(fig_bar, height=270)
             fig_bar.update_layout(
-                margin=dict(l=10, r=35, t=10, b=10),
-                xaxis=dict(title="Jumlah Kasus", showgrid=True, zeroline=False),
+                margin=dict(l=10, r=40, t=10, b=10),
+                xaxis=dict(
+                    title="Jumlah Kasus",
+                    showgrid=True,
+                    zeroline=False,
+                    range=[0, float(mach_counts["count"].max()) * 1.2],
+                ),
                 yaxis=dict(title="", tickfont=dict(size=11, color="#111827"), dtick=1),
             )
             st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})

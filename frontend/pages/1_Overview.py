@@ -421,7 +421,7 @@ with row1_right:
             off_kwh=off_kwh,
             total_label="Total Energi",
             total_val_str=total_kwh_rounded_str,
-            height=185,
+            height=270,
         )
         st.plotly_chart(donut_fig, use_container_width=True, config={"displayModeBar": False})
 
@@ -461,6 +461,11 @@ with row1_right:
                 </div>
             </div>
             """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            "<div style='padding-bottom:18px;'></div>",
             unsafe_allow_html=True,
         )
 
