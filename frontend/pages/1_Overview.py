@@ -28,6 +28,7 @@ try:
         style_plotly_fig,
         format_id_num,
         format_id_currency,
+        create_status_donut,
     )
 except ImportError:
     from api_client import (
@@ -43,6 +44,7 @@ except ImportError:
         style_plotly_fig,
         format_id_num,
         format_id_currency,
+        create_status_donut,
     )
 
 try:
@@ -277,10 +279,10 @@ else:
     utilisasi_pct = 0.0
     run_kwh, idle_kwh, off_kwh = 0.0, 0.0, 0.0
     pct_run_val, pct_idle_val, pct_off_val = 0.0, 0.0, 0.0
-    delta_html = '<span style="color:#6B6259; font-size:12px;">—</span>'
+    delta_html = '<span style="color:#6B7280; font-size:12px;">—</span>'
 
-# Subjudul halaman: lini + rentang periode yang tampil (WIB)
-subjudul_halaman = f"// {lines_str} · {period_str}"
+# Subjudul halaman: lini + rentang periode yang tampil (WIB) tanpa gaya //
+subjudul_halaman = f"{lines_str} · {period_str}"
 
 
 # ---------------------------------------------------------------------------
@@ -291,11 +293,11 @@ header_col1, header_col2 = st.columns([2.2, 1.2])
 with header_col1:
     st.markdown(
         f"""
-        <div style="margin-bottom: 12px;">
-            <h1 style="color: #1F1A17; font-size: 2.2rem; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.03em;">
+        <div style="margin-bottom: 14px;">
+            <h1 style="color: #111827; font-size: 1.75rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">
                 Energy Dashboard Overview
             </h1>
-            <div style="font-size: 12px; font-weight: 700; color: #6B6259; text-transform: uppercase; letter-spacing: 0.08em;">
+            <div style="font-size: 12px; font-weight: 500; color: #6B7280; letter-spacing: 0.02em;">
                 {subjudul_halaman}
             </div>
         </div>
@@ -304,7 +306,7 @@ with header_col1:
     )
 
 with header_col2:
-    st.markdown("<div style='margin-top: 18px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
     view_granularity = st.segmented_control(
         "Tampilan",
         options=["Hourly", "Daily"],
@@ -322,7 +324,7 @@ kpi_c1, kpi_c2, kpi_c3 = st.columns(3)
 with kpi_c1:
     st.markdown(
         f"""
-        <div class="kpi-card-velora" style="height:100%;">
+        <div class="kpi-card-dentexa" style="height:100%;">
             <div class="kpi-label">Total Konsumsi Energi</div>
             <div>
                 <span class="kpi-val">{format_id_num(total_kwh, 1)}</span>
@@ -339,14 +341,14 @@ with kpi_c1:
 with kpi_c2:
     st.markdown(
         f"""
-        <div class="kpi-card-velora" style="height:100%;">
-            <div class="kpi-label">Daya total jam terakhir data</div>
+        <div class="kpi-card-dentexa" style="height:100%;">
+            <div class="kpi-label">Daya Total Jam Terakhir Data</div>
             <div>
                 <span class="kpi-val">{format_id_num(cur_power, 1)}</span>
                 <span class="kpi-unit">kW</span>
             </div>
             <div class="kpi-sub">
-                <span style="color:#6B6259; font-weight:600; font-size:12px;">Rata-rata periode: <b>{format_id_num(avg_power, 1)} kW</b></span>
+                <span style="color:#6B7280; font-weight:500; font-size:12px;">Rata-rata periode: <b style="color:#111827;">{format_id_num(avg_power, 1)} kW</b></span>
             </div>
         </div>
         """,
@@ -356,14 +358,14 @@ with kpi_c2:
 with kpi_c3:
     st.markdown(
         f"""
-        <div class="kpi-card-velora" style="height:100%;">
+        <div class="kpi-card-dentexa" style="height:100%;">
             <div class="kpi-label">Estimasi Biaya Listrik (Grid)</div>
             <div>
                 <span class="kpi-val">{format_id_currency(cost_rp)}</span>
             </div>
             <div class="kpi-sub">
-                <span class="badge-pill-orange">⚡ Tarif {format_id_currency(TARIF_PER_KWH)}</span>
-                <span style="color:#6B6259; font-weight:500; font-size:12px;">per kWh</span>
+                <span class="badge-pill-blue">⚡ Tarif {format_id_currency(TARIF_PER_KWH)}</span>
+                <span style="color:#6B7280; font-weight:500; font-size:12px;">per kWh</span>
             </div>
         </div>
         """,
@@ -374,22 +376,22 @@ st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Baris Tengah: Energy Overview Line Chart & Power Radial Gauge (st.container)
+# Baris Tengah: Energy Overview Line Chart (Kiri) & Distribusi Beban Status (Kanan)
 # ---------------------------------------------------------------------------
-col_mid_left, col_mid_right = st.columns([1.8, 1.05])
+col_mid_left, col_mid_right = st.columns([1.75, 1.15])
 
 with col_mid_left:
     with st.container(border=True):
         st.markdown(
             """
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <div>
-                    <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Energy Overview</h3>
-                    <div style="font-size:12px; color:#6B6259; font-weight:600;">Daya total seluruh lini mesin (kW)</div>
+                    <h3 style="margin:0; font-size:1.05rem; font-weight:700; color:#111827;">Energy Overview</h3>
+                    <div style="font-size:12px; color:#6B7280; font-weight:500;">Profil beban daya total seluruh lini mesin pabrik (kW)</div>
                 </div>
-                <div style="display:flex; gap:16px; font-size:12px; font-weight:700;">
-                    <span style="display:flex; align-items:center; gap:5px; color:#E8590C;">
-                        <span style="width:12px; height:3px; background:#E8590C; border-radius:2px;"></span> Daya Total (kW)
+                <div style="display:flex; gap:16px; font-size:12px; font-weight:600;">
+                    <span style="display:flex; align-items:center; gap:6px; color:#1D6FF2;">
+                        <span style="width:12px; height:3px; background:#1D6FF2; border-radius:2px;"></span> Daya Total (kW)
                     </span>
                 </div>
             </div>
@@ -417,29 +419,29 @@ with col_mid_left:
 
             fig_multi = go.Figure()
 
-            # Satu garis daya total pabrik (kW)
+            # Garis daya total pabrik (kW) - Biru Dentexa #1D6FF2 dengan gradasi halus
             fig_multi.add_trace(
                 go.Scatter(
                     x=x_vals,
                     y=y_vals,
                     mode="lines",
                     name="Daya Total (kW)",
-                    line=dict(color="#E8590C", width=2.5, shape="spline"),
+                    line=dict(color="#1D6FF2", width=2.5, shape="spline"),
                     fill="tozeroy",
-                    fillcolor="rgba(232, 89, 12, 0.05)",
+                    fillcolor="rgba(29, 111, 242, 0.08)",
                     hovertemplate="<b>%{x|%d %b %Y, %H:00 WIB}</b><br>Daya Total: <b>%{y:.2f} kW</b><extra></extra>",
                 )
             )
 
             style_plotly_fig(fig_multi, height=330)
             fig_multi.update_layout(
-                margin=dict(l=20, r=20, t=10, b=30),
+                margin=dict(l=15, r=15, t=10, b=25),
                 hovermode="x unified",
             )
             st.plotly_chart(fig_multi, use_container_width=True, config={"displayModeBar": False})
 
 with col_mid_right:
-    # Caption timestamp jam terakhir data untuk gauge
+    # Caption timestamp jam terakhir data untuk kartu status
     if not hourly_total.empty:
         last_hour_str = hourly_total["hour_wib"].iloc[-1].strftime("%d %b %Y, %H:00 WIB")
     else:
@@ -448,105 +450,79 @@ with col_mid_right:
     with st.container(border=True):
         st.markdown(
             f"""
-            <div style="margin-bottom:4px;">
-                <div style="font-weight:800; font-size:1.15rem; color:#1F1A17; margin-bottom:4px;">Power Meter</div>
-                <div style="font-size:12px; color:#6B6259; font-weight:600; margin-bottom:2px;">
-                    Total Daya Seluruh Mesin (Kapasitas: {format_id_num(total_rated_kw, 1)} kW)
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+                <div>
+                    <h3 style="margin:0; font-size:1.05rem; font-weight:700; color:#111827;">Sebaran Status Beban</h3>
+                    <div style="font-size:12px; color:#6B7280; font-weight:500;">
+                        Kapasitas Total: {format_id_num(total_rated_kw, 1)} kW
+                    </div>
                 </div>
-                <div style="font-size:11px; color:#8C827A;">
-                    Jam terakhir data: {last_hour_str}
+                <div style="font-size:11px; color:#6B7280; text-align:right;">
+                    {last_hour_str}
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # Dial Radial Gauge: Skala 0 sampai total rated_power_kw semua mesin (466 kW)
-        gauge_fig = go.Figure(
-            go.Indicator(
-                mode="gauge+number",
-                value=round(cur_power, 2),
-                domain={"x": [0.05, 0.95], "y": [0.15, 0.95]},
-                title={
-                    "text": "<span style='font-size:12px;color:#6B6259;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'>Daya total jam terakhir data</span>",
-                    "font": {"size": 13, "family": "Plus Jakarta Sans"},
-                },
-                number={
-                    "suffix": " <span style='font-size:13px;color:#6B6259;font-weight:500;'>kW</span>",
-                    "font": {"size": 34, "color": "#1F1A17", "family": "Plus Jakarta Sans"},
-                },
-                gauge={
-                    "axis": {
-                        "range": [0, total_rated_kw],
-                        "tickwidth": 1.5,
-                        "tickcolor": "#C4B5A5",
-                        "ticklen": 6,
-                        "nticks": 8,
-                        "tickfont": {"size": 12, "color": "#6B6259"},
-                    },
-                    "bar": {"color": "#E8590C", "thickness": 0.14},
-                    "bgcolor": "#FFF7EB",
-                    "borderwidth": 0,
-                    "steps": [
-                        {"range": [0, total_rated_kw], "color": "#FAF4E8"},
-                    ],
-                },
-            )
+        # Donut Chart gaya 'Expenses' Dentexa (Running / Idle / Off)
+        donut_fig = create_status_donut(
+            run_pct=pct_run_val,
+            idle_pct=pct_idle_val,
+            off_pct=pct_off_val,
+            run_kwh=run_kwh,
+            idle_kwh=idle_kwh,
+            off_kwh=off_kwh,
+            height=160,
         )
-        gauge_fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=195,
-            margin=dict(l=15, r=15, t=20, b=10),
-        )
-        st.plotly_chart(gauge_fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(donut_fig, use_container_width=True, config={"displayModeBar": False})
 
-        # Min / Max / Avg bar dihitung dari deret TOTAL daya semua mesin per jam
+        # Bar statistik Min / Max / Rata-rata daya total per jam
         st.markdown(
             f"""
-            <div style="display:flex; justify-content:space-around; text-align:center; padding:8px 0; border-top:1px solid #EFE5D6; margin-top:-8px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-around; text-align:center; padding:8px 0; border-top:1px solid #E5E8EF; margin-top:-4px; margin-bottom:10px;">
                 <div>
-                    <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Min</div>
-                    <div style="font-size:14px; font-weight:700; color:#1F1A17;">{format_id_num(min_power, 1)} <span style="font-size:12px;">kW</span></div>
+                    <div style="font-size:11px; color:#6B7280; text-transform:uppercase; font-weight:600;">Min</div>
+                    <div style="font-size:13px; font-weight:700; color:#111827;">{format_id_num(min_power, 1)} <span style="font-size:11px; font-weight:500; color:#6B7280;">kW</span></div>
                 </div>
-                <div style="border-right:1px solid #EFE5D6;"></div>
+                <div style="border-right:1px solid #E5E8EF;"></div>
                 <div>
-                    <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Max</div>
-                    <div style="font-size:14px; font-weight:700; color:#E8590C;">{format_id_num(max_power, 1)} <span style="font-size:12px;">kW</span></div>
+                    <div style="font-size:11px; color:#6B7280; text-transform:uppercase; font-weight:600;">Max</div>
+                    <div style="font-size:13px; font-weight:700; color:#1D6FF2;">{format_id_num(max_power, 1)} <span style="font-size:11px; font-weight:500; color:#6B7280;">kW</span></div>
                 </div>
-                <div style="border-right:1px solid #EFE5D6;"></div>
+                <div style="border-right:1px solid #E5E8EF;"></div>
                 <div>
-                    <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Rata-rata</div>
-                    <div style="font-size:14px; font-weight:700; color:#1F1A17;">{format_id_num(avg_power, 1)} <span style="font-size:12px;">kW</span></div>
+                    <div style="font-size:11px; color:#6B7280; text-transform:uppercase; font-weight:600;">Rata-rata</div>
+                    <div style="font-size:13px; font-weight:700; color:#111827;">{format_id_num(avg_power, 1)} <span style="font-size:11px; font-weight:500; color:#6B7280;">kW</span></div>
                 </div>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; flex-direction:column; gap:7px;">
                 <div>
-                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
-                        <span style="color:#6B6259;">Konsumsi Beban Running</span>
-                        <span style="color:#16A34A; font-weight:700;">{format_id_num(pct_run_val, 1)}% ({format_id_num(run_kwh, 1)} kWh)</span>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:500; margin-bottom:3px;">
+                        <span style="color:#6B7280;">Running</span>
+                        <span style="color:#16A34A; font-weight:600;">{format_id_num(pct_run_val, 1)}% ({format_id_num(run_kwh, 1)} kWh)</span>
                     </div>
-                    <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
-                        <div style="background:#16A34A; width:{pct_run_val:.1f}%; height:100%; border-radius:4px;"></div>
+                    <div style="background:#F3F4F6; height:5px; border-radius:3px; overflow:hidden;">
+                        <div style="background:#16A34A; width:{pct_run_val:.1f}%; height:100%; border-radius:3px;"></div>
                     </div>
                 </div>
                 <div>
-                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
-                        <span style="color:#6B6259;">Konsumsi Beban Standby (Idle)</span>
-                        <span style="color:#F2C230; font-weight:700;">{format_id_num(pct_idle_val, 1)}% ({format_id_num(idle_kwh, 1)} kWh)</span>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:500; margin-bottom:3px;">
+                        <span style="color:#6B7280;">Standby (Idle)</span>
+                        <span style="color:#F59E0B; font-weight:600;">{format_id_num(pct_idle_val, 1)}% ({format_id_num(idle_kwh, 1)} kWh)</span>
                     </div>
-                    <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
-                        <div style="background:#F2C230; width:{pct_idle_val:.1f}%; height:100%; border-radius:4px;"></div>
+                    <div style="background:#F3F4F6; height:5px; border-radius:3px; overflow:hidden;">
+                        <div style="background:#F59E0B; width:{pct_idle_val:.1f}%; height:100%; border-radius:3px;"></div>
                     </div>
                 </div>
                 <div>
-                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
-                        <span style="color:#6B6259;">Kondisi Mesin Mati (Off)</span>
-                        <span style="color:#8C827A; font-weight:700;">{format_id_num(pct_off_val, 1)}% ({format_id_num(off_kwh, 1)} kWh)</span>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:500; margin-bottom:3px;">
+                        <span style="color:#6B7280;">Mati (Off)</span>
+                        <span style="color:#6B7280; font-weight:600;">{format_id_num(pct_off_val, 1)}% ({format_id_num(off_kwh, 1)} kWh)</span>
                     </div>
-                    <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
-                        <div style="background:#C4B5A5; width:{pct_off_val:.1f}%; height:100%; border-radius:4px;"></div>
+                    <div style="background:#F3F4F6; height:5px; border-radius:3px; overflow:hidden;">
+                        <div style="background:#9CA3AF; width:{pct_off_val:.1f}%; height:100%; border-radius:3px;"></div>
                     </div>
                 </div>
             </div>
@@ -558,7 +534,7 @@ st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Baris Bawah: 3 Kolom (Alerts per Tipe, Ringkasan Operasional, Peta Beban Mesin)
+# Baris Bawah: 3 Kolom (Peringatan, Ringkasan Operasional, Heatmap Beban)
 # ---------------------------------------------------------------------------
 b_c1, b_c2, b_c3 = st.columns([1.05, 1.15, 1.6])
 
@@ -570,14 +546,14 @@ with b_c1:
         for atype, count in sorted(alert_type_counts.items(), key=lambda x: -x[1]):
             readable_type = atype.replace("_", " ").title()
             rows_parts.append(
-                f'<div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">'
-                f'<span style="color:#6B6259;">{readable_type}</span>'
-                f'<span style="font-weight:700; color:#1F1A17;">{count} Kasus</span>'
+                f'<div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:6px 0; border-bottom:1px solid #F3F4F6;">'
+                f'<span style="color:#6B7280; font-weight:500;">{readable_type}</span>'
+                f'<span style="font-weight:600; color:#111827;">{count} Kasus</span>'
                 f'</div>'
             )
     else:
         rows_parts.append(
-            '<div style="font-size:13px; color:#6B6259; padding: 12px 0;">'
+            '<div style="font-size:12px; color:#6B7280; padding: 12px 0;">'
             'Tidak ada pemborosan terdeteksi pada rentang waktu ini.'
             '</div>'
         )
@@ -586,12 +562,12 @@ with b_c1:
     with st.container(border=True):
         st.markdown(
             "".join([
-                '<div style="min-height:305px; display:flex; flex-direction:column; justify-content:flex-start;">',
-                '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">',
-                f'<div style="font-weight:700; font-size:14px; color:#1F1A17;">Peringatan Pemborosan {mock_badge_html}</div>',
-                f'<span class="badge-pill-orange">{total_waste_alerts} Kasus</span>',
+                '<div style="min-height:295px; display:flex; flex-direction:column; justify-content:flex-start;">',
+                '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
+                f'<div style="font-weight:700; font-size:0.95rem; color:#111827;">Peringatan Pemborosan {mock_badge_html}</div>',
+                f'<span class="badge-pill-amber">{total_waste_alerts} Kasus</span>',
                 '</div>',
-                '<div style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">',
+                '<div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">',
                 alert_rows_html,
                 '</div>',
                 '</div>',
@@ -603,27 +579,27 @@ with b_c2:
     with st.container(border=True):
         st.markdown(
             f"""
-            <div style="min-height:305px; display:flex; flex-direction:column; justify-content:flex-start;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <div style="font-weight:700; font-size:14px; color:#1F1A17;">Ringkasan Operasional</div>
+            <div style="min-height:295px; display:flex; flex-direction:column; justify-content:flex-start;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-weight:700; font-size:0.95rem; color:#111827;">Ringkasan Operasional</div>
                     <span class="badge-pill-green">Aktif</span>
                 </div>
-                <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
-                    <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
-                        <span style="color:#6B6259;">Tingkat Utilisasi Daya</span>
-                        <span style="font-weight:700; color:#1F1A17;">{format_id_num(utilisasi_pct, 1)}%</span>
+                <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
+                    <div style="display:flex; justify-content:space-between; font-size:12px; padding-bottom:6px; border-bottom:1px solid #F3F4F6;">
+                        <span style="color:#6B7280; font-weight:500;">Tingkat Utilisasi Daya</span>
+                        <span style="font-weight:600; color:#111827;">{format_id_num(utilisasi_pct, 1)}%</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
-                        <span style="color:#6B6259;">Jumlah Mesin Terdaftar</span>
-                        <span style="font-weight:700; color:#1F1A17;">{len(machines)} Mesin</span>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; padding-bottom:6px; border-bottom:1px solid #F3F4F6;">
+                        <span style="color:#6B7280; font-weight:500;">Jumlah Mesin Terdaftar</span>
+                        <span style="font-weight:600; color:#111827;">{len(machines)} Mesin</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
-                        <span style="color:#6B6259;">Total Kapasitas Terpasang</span>
-                        <span style="font-weight:700; color:#1F1A17;">{format_id_num(total_rated_kw, 1)} kW</span>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; padding-bottom:6px; border-bottom:1px solid #F3F4F6;">
+                        <span style="color:#6B7280; font-weight:500;">Total Kapasitas Terpasang</span>
+                        <span style="font-weight:600; color:#111827;">{format_id_num(total_rated_kw, 1)} kW</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-size:13px;">
-                        <span style="color:#6B6259;">Total Konsumsi 7 Hari</span>
-                        <span style="font-weight:700; color:#1F1A17;">{format_id_num(total_kwh, 1)} kWh</span>
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span style="color:#6B7280; font-weight:500;">Total Konsumsi 7 Hari</span>
+                        <span style="font-weight:600; color:#111827;">{format_id_num(total_kwh, 1)} kWh</span>
                     </div>
                 </div>
             </div>
@@ -636,8 +612,8 @@ with b_c3:
         st.markdown(
             """
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <div style="font-weight:700; font-size:14px; color:#1F1A17;">Peta Beban Mesin (Heatmap)</div>
-                <span style="font-size:12px; color:#6B6259; font-weight:600;">Jam 00–23 (WIB)</span>
+                <div style="font-weight:700; font-size:0.95rem; color:#111827;">Peta Beban Mesin (Heatmap)</div>
+                <span style="font-size:11px; color:#6B7280; font-weight:500;">Jam 00–23 (WIB)</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -669,22 +645,23 @@ with b_c3:
                     row_z.append(round(ratio, 4))
                 matrix_z.append(row_z)
 
+            # Skala Biru Dentexa: #EAF2FF (beban sangat rendah) ke #1D6FF2 (beban tinggi)
             fig_heatmap = go.Figure(
                 data=go.Heatmap(
                     z=matrix_z,
                     x=hours_labels,
                     y=machine_ids,
-                    xgap=3,
-                    ygap=3,
+                    xgap=2,
+                    ygap=2,
                     colorscale=[
-                        [0.0, "#FFF9DB"],
-                        [0.5, "#FCD34D"],
-                        [1.0, "#E8590C"],
+                        [0.0, "#EAF2FF"],
+                        [0.5, "#93C5FD"],
+                        [1.0, "#1D6FF2"],
                     ],
                     colorbar=dict(
-                        title=dict(text="Beban", font=dict(size=11, color="#6B6259")),
+                        title=dict(text="Beban", font=dict(size=11, color="#6B7280")),
                         tickformat=".0%",
-                        tickfont=dict(size=11, color="#6B6259"),
+                        tickfont=dict(size=10, color="#6B7280"),
                         len=0.9,
                         thickness=10,
                     ),
@@ -693,16 +670,16 @@ with b_c3:
             )
             fig_heatmap.update_xaxes(
                 title_text="Jam WIB",
-                tickfont=dict(size=11, color="#6B6259"),
-                title_font=dict(size=11, color="#6B6259"),
+                tickfont=dict(size=10, color="#6B7280"),
+                title_font=dict(size=11, color="#6B7280"),
             )
             fig_heatmap.update_yaxes(
                 autorange="reversed",
                 tickmode="linear",
                 dtick=1,
-                tickfont=dict(size=10, color="#6B6259"),
+                tickfont=dict(size=10, color="#6B7280"),
             )
-            style_plotly_fig(fig_heatmap, height=265)
+            style_plotly_fig(fig_heatmap, height=255)
             fig_heatmap.update_layout(
                 margin=dict(l=10, r=10, t=10, b=25),
             )

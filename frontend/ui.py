@@ -2,26 +2,45 @@
 frontend/ui.py
 ==============
 Modul utilitas UI & Styling untuk Smart Factory Energy Management.
-Menyediakan CSS injection modern (Warm Light Theme ala Velora / Solar Energy Dashboard),
-konfigurasi tema Plotly terang dan bersih, serta komponen visual premium seperti
-radial gauge dial, circular progress donut, panel heatmap, dan custom metric cards.
+Menerapkan Design System 'Dentexa' (SaaS Admin Dashboard):
+- Skema warna: Primer Biru #1D6FF2, Latar Halaman Abu Muda #F3F5F9, Kartu Putih #FFFFFF
+- Border tipis bersih #E5E8EF, Radius 12-14px, Tipografi Inter
+- Sidebar modern dengan indikator aktif solid #1D6FF2
+- Badge pills (hijau, amber, merah, abu, biru) dengan kontras tinggi
+- Chart Plotly bergaris halus spline, gridline tipis, fill gradien biru/amber
 """
 
-import streamlit as st
-import plotly.graph_objects as go
 from typing import Optional, List, Dict, Any
+import plotly.graph_objects as go
+import streamlit as st
 
 # ---------------------------------------------------------------------------
-# Palet Warna Tema Terang Hangat
+# Palet Warna Tema Dentexa (SaaS Admin Klasik)
 # ---------------------------------------------------------------------------
-_BG_WHITE = "#FFFFFF"
-_BG_CREAM = "#FFF4E0"
-_TEXT_PRIMARY = "#1F1A17"
-_TEXT_SECONDARY = "#6B6259"
-_ACCENT_ORANGE = "#E8590C"
-_ACCENT_YELLOW = "#F2C230"
-_ACCENT_GREEN = "#16A34A"
-_BORDER_WARM = "#EFE5D6"
+COLOR_PRIMARY = "#1D6FF2"         # Biru solid utama (active sidebar, tombol, garis aktual)
+COLOR_PAGE_BG = "#F3F5F9"         # Background aplikasi abu muda sejuk
+COLOR_CARD_BG = "#FFFFFF"         # Background kartu putih bersih
+COLOR_CARD_BORDER = "#E5E8EF"     # Border tipis kartu & pembatas
+COLOR_TEXT_PRIMARY = "#111827"    # Teks utama gelap terbaca
+COLOR_TEXT_SECONDARY = "#6B7280"  # Teks label & deskripsi abu-abu
+
+# Status Operasional Mesin (Konsisten di semua halaman)
+COLOR_STATUS_RUNNING = "#16A34A"  # Hijau (Running)
+COLOR_STATUS_IDLE = "#F59E0B"     # Amber / Kuning Hangat (Standby / Idle)
+COLOR_STATUS_OFF = "#9CA3AF"      # Abu-abu Netral (Off / Mati)
+COLOR_STATUS_DANGER = "#EF4444"   # Merah Bahaya / High Anomaly
+
+# Palet Badge Pills (Background pucat + Teks solid tegas)
+BADGE_BG_GREEN = "#DCFCE7"
+BADGE_TXT_GREEN = "#166534"
+BADGE_BG_AMBER = "#FEF3C7"
+BADGE_TXT_AMBER = "#92400E"
+BADGE_BG_RED = "#FEE2E2"
+BADGE_TXT_RED = "#991B1B"
+BADGE_BG_GREY = "#F3F4F6"
+BADGE_TXT_GREY = "#4B5563"
+BADGE_BG_BLUE = "#DBEAFE"
+BADGE_TXT_BLUE = "#1E40AF"
 
 
 # ---------------------------------------------------------------------------
@@ -40,481 +59,587 @@ def format_id_currency(val: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Injeksi CSS Kustom: Warm Light Theme (Velora Aesthetic)
+# Injeksi CSS Kustom: Dentexa Design System
 # ---------------------------------------------------------------------------
 CUSTOM_CSS = """
 <style>
-    /* Import Google Font modern: Plus Jakarta Sans */
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+    /* Google Font: Inter (SaaS Admin Standar) */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    html, body, [class*="css"], [data-testid="stAppViewContainer"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     }
 
-    /* Sembunyikan tombol deploy dan footer bawaan */
+    /* Sembunyikan elemen bawaan yang tidak diperlukan */
     .stDeployButton, footer, #MainMenu {
         display: none !important;
         visibility: hidden !important;
     }
 
-    /* Header & Kontrol Buka/Tutup Sidebar */
+    /* Header aplikasi transparan agar menyatu dengan background */
     [data-testid="stHeader"] {
         background-color: transparent !important;
         z-index: 100 !important;
     }
 
-    /* Pastikan tombol buka sidebar (panah kiri atas) dan tombol collapse SELALU terlihat */
+    /* Tombol Buka/Tutup Sidebar SELALU terlihat */
     [data-testid="stSidebarCollapsedControl"],
     [data-testid="stSidebarCollapseButton"] {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         z-index: 1000 !important;
-        color: #1F1A17 !important;
+        color: #111827 !important;
     }
 
     [data-testid="stSidebarCollapsedControl"] button,
     [data-testid="stSidebarCollapseButton"] button {
-        color: #1F1A17 !important;
-        background-color: #FAF6EF !important;
-        border: 1px solid #EFE5D6 !important;
+        color: #111827 !important;
+        background-color: #FFFFFF !important;
+        border: 1px solid #E5E8EF !important;
         border-radius: 8px !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
     }
 
     [data-testid="stSidebarCollapsedControl"] svg,
     [data-testid="stSidebarCollapseButton"] svg {
-        fill: #1F1A17 !important;
-        color: #1F1A17 !important;
+        fill: #111827 !important;
+        color: #111827 !important;
     }
 
-    /* Background Utama: gradien putih ke krem hangat sangat lembut */
+    /* Background Utama Aplikasi */
     .stApp {
-        background: radial-gradient(circle at 90% 10%, #FFF8ED 0%, #FFFFFF 45%), 
-                    radial-gradient(circle at 10% 90%, #FFF3DE 0%, #FFFFFF 60%);
-        background-color: #FAFAF7;
-        color: #1F1A17;
+        background-color: #F3F5F9 !important;
+        color: #111827 !important;
     }
 
-    /* Sidebar Styling Premium Warm Light */
+    /* Sidebar Styling Dentexa: Background #F8F9FC dengan garis batas kanan bersih */
     [data-testid="stSidebar"] {
-        background-color: #FAF6EF !important;
-        border-right: 1px solid #EFE5D6;
+        background-color: #F8F9FC !important;
+        border-right: 1px solid #E5E8EF !important;
     }
-    
+
     [data-testid="stSidebar"] [data-testid="stSidebarNav"] {
-        padding-top: 1rem;
+        padding-top: 0.5rem;
     }
 
-    /* Sidebar: teks terbaca jelas */
-    [data-testid="stSidebar"], [data-testid="stSidebar"] * {
-        color: #1F1A17 !important;
-    }
-
-    /* Styling Tautan Menu Navigasi */
+    /* Menu Sidebar Items */
     [data-testid="stSidebarNav"] a {
-        border-radius: 12px;
-        margin: 4px 10px;
-        padding: 9px 16px;
-        transition: all 0.2s ease-in-out;
-        color: #6B6259 !important;
-        font-weight: 500;
-        font-size: 0.9rem;
+        border-radius: 8px !important;
+        margin: 3px 12px !important;
+        padding: 8px 14px !important;
+        transition: all 0.15s ease-in-out !important;
+        color: #6B7280 !important;
+        font-weight: 500 !important;
+        font-size: 0.88rem !important;
+        border-left: none !important;
     }
 
     [data-testid="stSidebarNav"] a:hover {
-        background: rgba(232, 89, 12, 0.08);
-        color: #E8590C !important;
-        transform: translateX(3px);
+        background-color: #EEF2F6 !important;
+        color: #111827 !important;
     }
 
+    /* Item Aktif Sidebar: Biru Solid #1D6FF2 dengan teks putih */
     [data-testid="stSidebarNav"] a[aria-current="page"] {
-        background: #FFFFFF !important;
-        color: #E8590C !important;
-        border-left: 3px solid #E8590C;
-        font-weight: 700;
-        box-shadow: 0 2px 8px -2px rgba(232, 89, 12, 0.15);
-    }
-
-    /* Kartu Metrik (st.metric) — putih bersih, batas hangat */
-    [data-testid="stMetric"] {
-        background: #FFFFFF;
-        border: 1px solid #EFE5D6;
-        border-radius: 16px;
-        padding: 20px 22px;
-        box-shadow: 0 2px 10px -2px rgba(31, 26, 23, 0.04);
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-
-    [data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
-        border-color: #E8590C;
-        box-shadow: 0 6px 18px -4px rgba(232, 89, 12, 0.10);
-    }
-
-    [data-testid="stMetricLabel"] {
-        color: #6B6259 !important;
-        font-size: 0.8rem !important;
-        font-weight: 600 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-    }
-
-    [data-testid="stMetricValue"] {
-        color: #1F1A17 !important;
-        font-size: 1.9rem !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.03em;
-    }
-
-    /* Delta metric */
-    [data-testid="stMetricDelta"] {
-        color: #16A34A !important;
-        font-weight: 600 !important;
-        font-size: 0.82rem !important;
-    }
-
-    /* Segmented Pill Radio Style ala Hourly/Daily/Monthly */
-    div[data-testid="stRadio"] > div[role="radiogroup"] {
-        background: #F3ECE2 !important;
-        padding: 4px !important;
-        border-radius: 24px !important;
-        gap: 4px !important;
-        border: 1px solid #EAE0D0 !important;
-    }
-
-    div[data-testid="stRadio"] label {
-        background: transparent !important;
-        border-radius: 20px !important;
-        padding: 4px 14px !important;
-        margin: 0 !important;
-        transition: all 0.2s ease !important;
-        font-size: 0.84rem !important;
-        font-weight: 600 !important;
-        color: #6B6259 !important;
-    }
-
-    div[data-testid="stRadio"] label:has(input:checked) {
-        background: #FFFFFF !important;
-        color: #1F1A17 !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
-    }
-
-    div[data-testid="stRadio"] label input {
-        display: none !important;
-    }
-
-    /* Tombol Interaktif Oranye */
-    .stButton > button {
-        background: linear-gradient(135deg, #E8590C 0%, #D14E0A 100%) !important;
+        background-color: #1D6FF2 !important;
         color: #FFFFFF !important;
-        border: 1px solid rgba(232, 89, 12, 0.3) !important;
-        border-radius: 12px !important;
-        padding: 9px 20px !important;
         font-weight: 600 !important;
-        box-shadow: 0 4px 14px 0 rgba(232, 89, 12, 0.2);
-        transition: all 0.25s ease !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 6px rgba(29, 111, 242, 0.25) !important;
+    }
+
+    [data-testid="stSidebarNav"] a[aria-current="page"] span,
+    [data-testid="stSidebarNav"] a[aria-current="page"] svg {
+        color: #FFFFFF !important;
+        fill: #FFFFFF !important;
+    }
+
+    /* Kartu Container Bawaan st.container(border=True) */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E5E8EF !important;
+        border-radius: 14px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        padding: 16px 18px !important;
+    }
+
+    /* Tombol Utama (Primary Button) */
+    .stButton > button {
+        background-color: #1D6FF2 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #1D6FF2 !important;
+        border-radius: 8px !important;
+        padding: 8px 18px !important;
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
+        box-shadow: 0 1px 2px rgba(29, 111, 242, 0.15) !important;
+        transition: all 0.15s ease-in-out !important;
     }
 
     .stButton > button:hover {
-        background: linear-gradient(135deg, #F06A1E 0%, #E8590C 100%) !important;
-        box-shadow: 0 6px 20px 0 rgba(232, 89, 12, 0.3) !important;
-        transform: translateY(-1px);
+        background-color: #1558C0 !important;
+        border-color: #1558C0 !important;
+        box-shadow: 0 3px 8px rgba(29, 111, 242, 0.25) !important;
     }
 
-    /* Input & Select Box Elegan */
-    div[data-baseweb="select"] > div,
-    div[data-baseweb="input"] > div {
+    /* Tombol Unduh / Secondary Button */
+    [data-testid="stDownloadButton"] > button {
         background-color: #FFFFFF !important;
-        border: 1px solid #EFE5D6 !important;
-        border-radius: 12px !important;
-        color: #1F1A17 !important;
+        color: #111827 !important;
+        border: 1px solid #E5E8EF !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        font-size: 0.86rem !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+        transition: all 0.15s ease !important;
+    }
+
+    [data-testid="stDownloadButton"] > button:hover {
+        background-color: #F9FAFB !important;
+        border-color: #D1D5DB !important;
+        color: #1D6FF2 !important;
+    }
+
+    /* Input & Select Box */
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
+    [data-testid="stDateInput"] input {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E5E8EF !important;
+        border-radius: 8px !important;
+        color: #111827 !important;
+        font-size: 0.88rem !important;
     }
 
     div[data-baseweb="select"] > div:hover,
-    div[data-baseweb="input"] > div:hover {
-        border-color: #E8590C !important;
+    div[data-baseweb="input"] > div:hover,
+    [data-testid="stDateInput"] input:hover {
+        border-color: #1D6FF2 !important;
     }
 
-    /* Expander Styling */
-    [data-testid="stExpander"] {
-        background: #FFFFFF;
-        border: 1px solid #EFE5D6 !important;
-        border-radius: 14px !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02) !important;
+    /* Segmented Control & Pills Dentexa: abu muda dengan item aktif putih bershadow */
+    [data-testid="stSegmentedControl"], [data-testid="stPills"] {
+        background-color: #F3F4F6 !important;
+        padding: 3px !important;
+        border-radius: 10px !important;
+        border: 1px solid #E5E8EF !important;
     }
 
-    /* Garis Pemisah Halus */
-    hr {
-        border: none;
-        height: 1px;
-        background: linear-gradient(90deg, rgba(239,229,214,0) 0%, #EFE5D6 50%, rgba(239,229,214,0) 100%);
-        margin: 1.25rem 0;
+    [data-testid="stSegmentedControl"] button, [data-testid="stPills"] button {
+        border-radius: 8px !important;
+        border: none !important;
+        background: transparent !important;
+        color: #6B7280 !important;
+        font-weight: 500 !important;
+        font-size: 0.84rem !important;
+        padding: 5px 14px !important;
+        transition: all 0.15s ease !important;
     }
 
-    /* Container Kartu Kustom */
-    .glass-card {
-        background: #FFFFFF;
-        border: 1px solid #EFE5D6;
-        border-radius: 16px;
-        padding: 22px 24px;
-        box-shadow: 0 2px 10px -2px rgba(31, 26, 23, 0.04);
-        margin-bottom: 1.25rem;
+    [data-testid="stSegmentedControl"] button[aria-selected="true"],
+    [data-testid="stPills"] button[aria-selected="true"] {
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+        border: 1px solid #E5E8EF !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+        font-weight: 600 !important;
     }
 
-    .badge-mock {
-        display: inline-block;
-        background: rgba(232, 89, 12, 0.10);
-        color: #E8590C;
-        border: 1px solid rgba(232, 89, 12, 0.30);
-        border-radius: 6px;
-        padding: 2px 8px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        letter-spacing: 0.03em;
+    /* Styling Tabs: Dentexa Border Bawah Biru Aktif */
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent !important;
+        border-bottom: 1px solid #E5E8EF !important;
+        padding-bottom: 0px !important;
     }
 
-    .badge-pill-green {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        background: rgba(22, 163, 74, 0.10);
-        color: #16A34A;
-        border-radius: 20px;
-        padding: 3px 10px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.02em;
+    [data-testid="stTabs"] [data-baseweb="tab"] {
+        background-color: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        color: #6B7280 !important;
+        font-weight: 500 !important;
+        font-size: 0.9rem !important;
+        padding: 8px 16px !important;
+        border-radius: 0 !important;
     }
 
-    .badge-pill-orange {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        background: rgba(232, 89, 12, 0.10);
-        color: #E8590C;
-        border-radius: 20px;
-        padding: 3px 10px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.02em;
+    [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {
+        color: #1D6FF2 !important;
+        border-bottom: 2px solid #1D6FF2 !important;
+        font-weight: 600 !important;
     }
 
-    /* Pastikan heading & body text selalu terbaca */
-    h1, h2, h3, h4, h5, h6 {
-        color: #1F1A17 !important;
-        font-weight: 800;
-        letter-spacing: -0.02em;
-    }
-
-    p, span, label, .stMarkdown {
-        color: #1F1A17;
-    }
-
-    .stCaption, [data-testid="stCaptionContainer"] {
-        color: #6B6259 !important;
-    }
-
-    /* Custom KPI Stat Card */
-    .kpi-card-velora {
-        background: #FFFFFF;
-        border: 1px solid #EFE5D6;
-        border-radius: 16px;
-        padding: 20px 22px;
-        box-shadow: 0 2px 10px -2px rgba(31, 26, 23, 0.04);
+    /* Kartu KPI Dentexa */
+    .kpi-card-dentexa, .kpi-card-velora {
+        background-color: #FFFFFF;
+        border: 1px solid #E5E8EF;
+        border-radius: 14px;
+        padding: 18px 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         position: relative;
     }
-    .kpi-card-velora .kpi-label {
-        font-size: 0.78rem;
+
+    .kpi-card-dentexa .kpi-label, .kpi-card-velora .kpi-label {
+        font-size: 0.76rem;
         font-weight: 600;
-        color: #6B6259;
+        color: #6B7280;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.05em;
         margin-bottom: 6px;
     }
-    .kpi-card-velora .kpi-val {
-        font-size: 2.1rem;
-        font-weight: 800;
-        color: #1F1A17;
-        letter-spacing: -0.03em;
-        line-height: 1.1;
+
+    .kpi-card-dentexa .kpi-val, .kpi-card-velora .kpi-val {
+        font-size: 1.85rem;
+        font-weight: 700;
+        color: #111827;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
     }
-    .kpi-card-velora .kpi-unit {
-        font-size: 1rem;
+
+    .kpi-card-dentexa .kpi-unit, .kpi-card-velora .kpi-unit {
+        font-size: 0.95rem;
         font-weight: 500;
-        color: #6B6259;
+        color: #6B7280;
         margin-left: 4px;
     }
-    .kpi-card-velora .kpi-sub {
+
+    .kpi-card-dentexa .kpi-sub, .kpi-card-velora .kpi-sub {
         margin-top: 8px;
         font-size: 0.8rem;
-        font-weight: 600;
-        color: #16A34A;
+        color: #6B7280;
         display: flex;
         align-items: center;
         gap: 6px;
     }
 
-    /* ---- Chart Card: st.container(border=True) ---- */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background: #FFFFFF !important;
-        border: 1px solid #EFE5D6 !important;
-        border-radius: 18px !important;
-        box-shadow: 0 2px 10px -2px rgba(31, 26, 23, 0.04) !important;
-        padding: 16px 18px !important;
+    /* Badge Pills Gaya Dentexa */
+    .badge-pill-green {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background-color: #DCFCE7 !important;
+        color: #166534 !important;
+        border-radius: 20px;
+        padding: 2.5px 9px;
+        font-size: 0.74rem;
+        font-weight: 600;
     }
 
-    /* Segmented Control & Pills ala Velora Warm Light */
-    [data-testid="stSegmentedControl"], [data-testid="stPills"] {
-        background: #F3ECE2 !important;
-        padding: 4px !important;
-        border-radius: 24px !important;
-        border: 1px solid #EAE0D0 !important;
+    .badge-pill-amber, .badge-pill-orange {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background-color: #FEF3C7 !important;
+        color: #92400E !important;
+        border-radius: 20px;
+        padding: 2.5px 9px;
+        font-size: 0.74rem;
+        font-weight: 600;
     }
 
-    [data-testid="stSegmentedControl"] button, [data-testid="stPills"] button {
-        border-radius: 20px !important;
-        border: none !important;
-        background: transparent !important;
-        color: #6B6259 !important;
-        font-weight: 600 !important;
-        font-size: 0.84rem !important;
-        padding: 5px 16px !important;
-        transition: all 0.2s ease !important;
+    .badge-pill-red {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background-color: #FEE2E2 !important;
+        color: #991B1B !important;
+        border-radius: 20px;
+        padding: 2.5px 9px;
+        font-size: 0.74rem;
+        font-weight: 600;
     }
 
-    [data-testid="stSegmentedControl"] button[aria-selected="true"],
-    [data-testid="stPills"] button[aria-selected="true"] {
-        background: #FFFFFF !important;
-        color: #1F1A17 !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
-        font-weight: 700 !important;
+    .badge-pill-grey {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background-color: #F3F4F6 !important;
+        color: #4B5563 !important;
+        border-radius: 20px;
+        padding: 2.5px 9px;
+        font-size: 0.74rem;
+        font-weight: 600;
     }
 
-    /* ---- Equal-height bottom-row cards ---- */
-    .equal-height-card {
-        min-height: 260px;
+    .badge-pill-blue {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background-color: #DBEAFE !important;
+        color: #1E40AF !important;
+        border-radius: 20px;
+        padding: 2.5px 9px;
+        font-size: 0.74rem;
+        font-weight: 600;
     }
 
-    /* ---- Date Input Warm Style ---- */
-    [data-testid="stDateInput"] input {
-        border: 1px solid #EFE5D6 !important;
-        border-radius: 10px !important;
-        font-size: 13px !important;
+    .badge-mock {
+        display: inline-block;
+        background-color: #FEF3C7;
+        color: #92400E;
+        border: 1px solid #FDE68A;
+        border-radius: 6px;
+        padding: 2px 7px;
+        font-size: 0.74rem;
+        font-weight: 600;
     }
 
-    /* ---- Download Button Secondary Style ---- */
-    [data-testid="stDownloadButton"] > button {
-        background: #FFFFFF !important;
-        color: #E8590C !important;
-        border: 1px solid #E8590C !important;
-        border-radius: 12px !important;
-        font-weight: 600 !important;
-        box-shadow: none !important;
+    /* Headings */
+    h1, h2, h3, h4, h5, h6 {
+        color: #111827 !important;
+        font-weight: 700;
+        letter-spacing: -0.02em;
     }
 
-    [data-testid="stDownloadButton"] > button:hover {
-        background: rgba(232, 89, 12, 0.06) !important;
-        box-shadow: 0 4px 12px rgba(232, 89, 12, 0.12) !important;
-        transform: translateY(-1px);
+    p, span, label, .stMarkdown {
+        color: #111827;
     }
 
-    /* ---- Text Wrap & Padding untuk Sel Tabel st.dataframe ---- */
-    [data-testid="stDataFrame"] div[role="gridcell"] {
-        white-space: normal !important;
-        word-break: break-word !important;
-        line-height: 1.4 !important;
+    .stCaption, [data-testid="stCaptionContainer"] {
+        color: #6B7280 !important;
+        font-size: 0.8rem !important;
     }
 
+    /* Tabel Dentexa (Treatments Style) */
+    .dentexa-table-container {
+        background-color: #FFFFFF;
+        border: 1px solid #E5E8EF;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
 
+    .dentexa-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        text-align: left;
+    }
+
+    .dentexa-table thead tr {
+        background-color: #F8F9FC;
+        border-bottom: 1px solid #E5E8EF;
+        color: #6B7280;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .dentexa-table th {
+        padding: 10px 14px;
+    }
+
+    .dentexa-table td {
+        padding: 12px 14px;
+        border-bottom: 1px solid #F3F4F6;
+        color: #111827;
+        vertical-align: top;
+    }
+
+    .dentexa-table tbody tr:hover {
+        background-color: #F9FAFB;
+    }
+
+    /* Sidebar info box */
+    .sidebar-info-box {
+        margin-top: 1.5rem;
+        padding: 12px 14px;
+        background-color: #FFFFFF;
+        border-radius: 10px;
+        border: 1px solid #E5E8EF;
+        font-size: 0.78rem;
+        color: #6B7280;
+        line-height: 1.45;
+    }
 </style>
 """
 
 
 def apply_theme():
-    """Terapkan CSS kustom ke halaman aktif."""
+    """Terapkan CSS kustom Dentexa ke halaman aktif."""
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Konfigurasi Styling Plotly agar Senada dengan Tema Terang Hangat
+# Konfigurasi Styling Plotly Dentexa (Clean & Modern)
 # ---------------------------------------------------------------------------
-def style_plotly_fig(fig: go.Figure, height: int = 400) -> go.Figure:
-    """Modifikasi figure Plotly dengan palet warm-light modern."""
+def style_plotly_fig(fig: go.Figure, height: int = 360) -> go.Figure:
+    """Modifikasi figure Plotly dengan palet Dentexa (Clean, tipis, terbaca)."""
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="rgba(0, 0, 0, 0)",
         plot_bgcolor="rgba(0, 0, 0, 0)",
-        font=dict(family="Plus Jakarta Sans, sans-serif", color="#1F1A17", size=12),
+        font=dict(family="Inter, -apple-system, sans-serif", color="#111827", size=12),
         height=height,
-        margin=dict(l=25, r=25, t=40, b=35),
+        margin=dict(l=20, r=20, t=30, b=30),
         xaxis=dict(
-            gridcolor="rgba(107, 98, 89, 0.10)",
-            linecolor="rgba(107, 98, 89, 0.18)",
-            zerolinecolor="rgba(107, 98, 89, 0.12)",
+            gridcolor="rgba(107, 114, 128, 0.10)",
+            gridwidth=1,
+            griddash="dot",
+            linecolor="rgba(107, 114, 128, 0.20)",
+            zeroline=False,
+            tickfont=dict(size=11, color="#6B7280"),
         ),
         yaxis=dict(
-            gridcolor="rgba(107, 98, 89, 0.10)",
-            linecolor="rgba(107, 98, 89, 0.18)",
-            zerolinecolor="rgba(107, 98, 89, 0.12)",
+            gridcolor="rgba(107, 114, 128, 0.10)",
+            gridwidth=1,
+            griddash="dot",
+            linecolor="rgba(107, 114, 128, 0.20)",
+            zeroline=False,
+            tickfont=dict(size=11, color="#6B7280"),
         ),
         hoverlabel=dict(
             bgcolor="#FFFFFF",
-            bordercolor="#E8590C",
+            bordercolor="#E5E8EF",
             font_size=12,
-            font_color="#1F1A17",
-            font_family="Plus Jakarta Sans, sans-serif",
+            font_color="#111827",
+            font_family="Inter, sans-serif",
         ),
     )
     return fig
 
 
 # ---------------------------------------------------------------------------
-# Komponen Visual Kustom ala Dashboard Referensi (Radial Gauge & Matrix)
+# Komponen Donut Chart (Gaya 'Expenses' Dentexa)
+# ---------------------------------------------------------------------------
+def create_status_donut(
+    run_pct: float,
+    idle_pct: float,
+    off_pct: float,
+    run_kwh: float,
+    idle_kwh: float,
+    off_kwh: float,
+    height: int = 210,
+) -> go.Figure:
+    """
+    Membuat Donut Chart sebaran status operasional (Running, Idle, Off)
+    bergaya 'Expenses' Dentexa dengan warna konsisten.
+    """
+    labels = ["Running", "Idle", "Off"]
+    values = [run_kwh, idle_kwh, off_kwh]
+    colors = [COLOR_STATUS_RUNNING, COLOR_STATUS_IDLE, COLOR_STATUS_OFF]
+
+    fig = go.Figure(
+        go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.68,
+            marker=dict(colors=colors, line=dict(color="#FFFFFF", width=2)),
+            textinfo="none",
+            hoverinfo="label+percent+value",
+            hovertemplate="<b>%{label}</b><br>Energi: %{value:,.1f} kWh<br>Porsi: <b>%{percent:.1%}</b><extra></extra>",
+            sort=False,
+            direction="clockwise",
+        )
+    )
+
+    fig.update_layout(
+        showlegend=True,
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=11, color="#6B7280"),
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=height,
+        margin=dict(l=10, r=10, t=10, b=10),
+    )
+    return fig
+
+
+def create_type_donut(type_counts: Dict[str, int], height: int = 260) -> go.Figure:
+    """
+    Membuat Donut Chart sebaran kategori anomali/pemborosan Dentexa.
+    """
+    labels = [k.replace("_", " ").title() for k in type_counts.keys()]
+    values = list(type_counts.values())
+    colors = ["#1D6FF2", "#F59E0B", "#6366F1", "#10B981", "#EC4899", "#8B5CF6"]
+
+    fig = go.Figure(
+        go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.66,
+            marker=dict(colors=colors[: len(labels)], line=dict(color="#FFFFFF", width=2)),
+            textinfo="none",
+            hovertemplate="<b>%{label}</b><br>Jumlah: %{value:,} kasus (%{percent:.1%})<extra></extra>",
+            sort=False,
+            direction="clockwise",
+        )
+    )
+
+    fig.update_layout(
+        showlegend=True,
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=11, color="#6B7280"),
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=height,
+        margin=dict(l=10, r=10, t=10, b=10),
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Komponen Radial Gauge Dentexa (Biru #1D6FF2 + Track Abu Muda #E5E8EF)
 # ---------------------------------------------------------------------------
 def create_radial_power_gauge(
     val: float,
+    rated_kw: float,
     min_val: float,
     max_val: float,
     avg_val: float,
-    title: str = "Power",
+    title: str = "Daya Total Jam Terakhir",
     unit: str = "kW",
+    height: int = 195,
 ) -> go.Figure:
     """
-    Membuat Circular Radial Gauge dial seperti pada referensi gambar:
-    - Dial melingkar dengan tick marks
-    - Nilai utama di tengah besar tebal
-    - Nilai Min, Max, Avg di bawah
+    Membuat Radial Gauge dengan gaya modern Dentexa:
+    - Dial melingkar biru #1D6FF2 dengan track abu muda #E5E8EF
+    - Skala 0 sampai rated_kw
     """
-    upper_bound = max(max_val * 1.15, val * 1.15, 10.0)
+    upper_bound = rated_kw if rated_kw > 0 else max(max_val * 1.1, 10.0)
 
     fig = go.Figure(
         go.Indicator(
             mode="gauge+number",
-            value=round(val, 1),
+            value=round(val, 2),
             domain={"x": [0.05, 0.95], "y": [0.15, 0.95]},
             title={
-                "text": f"<span style='font-size:12px;color:#6B6259;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'>{title}</span>",
-                "font": {"size": 13, "family": "Plus Jakarta Sans"},
+                "text": f"<span style='font-size:11px;color:#6B7280;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;'>{title}</span>",
+                "font": {"size": 12, "family": "Inter, sans-serif"},
             },
             number={
-                "suffix": f" <span style='font-size:13px;color:#6B6259;font-weight:500;'>{unit}</span>",
-                "font": {"size": 34, "color": "#1F1A17", "family": "Plus Jakarta Sans"},
+                "suffix": f" <span style='font-size:13px;color:#6B7280;font-weight:500;'>{unit}</span>",
+                "font": {"size": 32, "color": "#111827", "family": "Inter, sans-serif"},
             },
             gauge={
                 "axis": {
                     "range": [0, upper_bound],
-                    "tickwidth": 1.5,
-                    "tickcolor": "#C4B5A5",
-                    "ticklen": 6,
-                    "nticks": 8,
-                    "tickfont": {"size": 10, "color": "#6B6259"},
+                    "tickwidth": 1,
+                    "tickcolor": "#D1D5DB",
+                    "ticklen": 5,
+                    "nticks": 7,
+                    "tickfont": {"size": 10, "color": "#6B7280"},
                 },
-                "bar": {"color": "#E8590C", "thickness": 0.12},
-                "bgcolor": "#FFF7EB",
+                "bar": {"color": COLOR_PRIMARY, "thickness": 0.15},
+                "bgcolor": "#F3F4F6",
                 "borderwidth": 0,
                 "steps": [
-                    {"range": [0, upper_bound], "color": "#FAF4E8"},
+                    {"range": [0, upper_bound], "color": "#F3F4F6"},
                 ],
             },
         )
@@ -523,94 +648,7 @@ def create_radial_power_gauge(
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=220,
-        margin=dict(l=15, r=15, t=30, b=10),
+        height=height,
+        margin=dict(l=15, r=15, t=20, b=10),
     )
     return fig
-
-
-def create_donut_gauge(
-    pct: float,
-    center_text: Optional[str] = None,
-    sub_text: str = "+2%/hour",
-    status_label: str = "Active",
-    color: str = "#E8590C",
-) -> go.Figure:
-    """
-    Membuat Donut Gauge melingkar ala 'Battery Storage / Efisiensi' pada gambar referensi.
-    """
-    clamped_pct = max(0.0, min(100.0, pct))
-    main_text = center_text if center_text else f"{int(round(clamped_pct))}%"
-
-    fig = go.Figure(
-        go.Pie(
-            values=[clamped_pct, 100.0 - clamped_pct],
-            hole=0.76,
-            marker_colors=[color, "#F2ECE2"],
-            textinfo="none",
-            hoverinfo="none",
-            sort=False,
-            direction="clockwise",
-        )
-    )
-
-    fig.add_annotation(
-        text=f"<b style='font-size:26px;color:#1F1A17;'>{main_text}</b><br><span style='font-size:11px;color:#16A34A;font-weight:600;'>{sub_text}</span>",
-        showarrow=False,
-        font=dict(family="Plus Jakarta Sans"),
-        x=0.5,
-        y=0.5,
-    )
-
-    fig.update_layout(
-        showlegend=False,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        height=180,
-        margin=dict(l=10, r=10, t=10, b=10),
-    )
-    return fig
-
-
-def render_panel_heatmap_html(title: str = "Machine Activity Heatmap", subtitle: str = "24 Jam Operasional") -> str:
-    """
-    Menghasilkan HTML matriks rounded-square seperti 'Panel Heatmap' di gambar referensi.
-    """
-    # Warna intensitas representasi panel / sensor jam 1..12 baris A & B
-    row_a = ["#FDE68A", "#FCD34D", "#FDE68A", "#FDE68A", "#E8590C", "#FCD34D", "#FEF3C7", "#FEF3C7", "#FDE68A", "#FEF3C7", "#FDE68A", "#FEF3C7"]
-    row_b = ["#FEF3C7", "#FDE68A", "#FDE68A", "#FCD34D", "#FCD34D", "#FDE68A", "#FDE68A", "#FEF3C7", "#FDE68A", "#FCD34D", "#FEF3C7", "#FEF3C7"]
-
-    def make_tiles(colors):
-        return "".join(
-            f'<div style="flex:1; aspect-ratio:1; background:{c}; border-radius:6px; min-width:14px; max-width:28px;"></div>'
-            for c in colors
-        )
-
-    cols_labels = "".join(
-        f'<div style="flex:1; text-align:center; font-size:0.65rem; color:#8C827A; font-weight:600;">{i+1}</div>'
-        for i in range(12)
-    )
-
-    return f"""
-    <div style="background:#FFFFFF; border:1px solid #EFE5D6; border-radius:16px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <div style="font-weight:700; font-size:0.95rem; color:#1F1A17;">{title}</div>
-            <div style="font-size:0.75rem; color:#6B6259; font-weight:600;">{subtitle}</div>
-        </div>
-        <div style="display:flex; flex-direction:column; gap:6px;">
-            <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:0.75rem; font-weight:700; color:#8C827A; width:14px;">A</span>
-                <div style="display:flex; gap:6px; flex:1;">{make_tiles(row_a)}</div>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:0.75rem; font-weight:700; color:#8C827A; width:14px;">B</span>
-                <div style="display:flex; gap:6px; flex:1;">{make_tiles(row_b)}</div>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
-                <span style="width:14px;"></span>
-                <div style="display:flex; gap:6px; flex:1;">{cols_labels}</div>
-            </div>
-        </div>
-    </div>
-    """
-
