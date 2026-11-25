@@ -540,15 +540,25 @@ def create_status_donut(
         )
     )
 
-    # Anotasi dua baris di tengah lubang: label abu di atas, angka bold di bawah
+    # Anotasi dua baris terpisah di tengah lubang agar tidak pernah bertumpuk
     if total_val_str:
         fig.add_annotation(
-            text=f"<span style='font-size:9px;color:#6B7280;font-weight:600;text-transform:uppercase;'>{total_label}</span><br><b style='font-size:13px;color:#111827;font-weight:800;'>{total_val_str}</b>",
+            text=total_label.upper(),
             x=0.31,
-            y=0.5,
+            y=0.58,
             showarrow=False,
             align="center",
-            font=dict(family="Inter, sans-serif"),
+            font=dict(size=9, color="#6B7280", family="Inter, sans-serif"),
+            xanchor="center",
+            yanchor="middle",
+        )
+        fig.add_annotation(
+            text=f"<b>{total_val_str}</b>",
+            x=0.31,
+            y=0.42,
+            showarrow=False,
+            align="center",
+            font=dict(size=13, color="#111827", family="Inter, sans-serif"),
             xanchor="center",
             yanchor="middle",
         )
