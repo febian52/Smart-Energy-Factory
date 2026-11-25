@@ -24,6 +24,7 @@ try:
         apply_theme,
         style_plotly_fig,
         format_id_num,
+        render_dentexa_topbar,
     )
 except ImportError:
     from api_client import (
@@ -36,6 +37,7 @@ except ImportError:
         apply_theme,
         style_plotly_fig,
         format_id_num,
+        render_dentexa_topbar,
     )
 
 try:
@@ -78,13 +80,15 @@ if not machines:
 # ---------------------------------------------------------------------------
 # Header Halaman & Segmented Filter Control
 # ---------------------------------------------------------------------------
+render_dentexa_topbar(page_title="Detail Mesin", welcome_sub="Profil Operasional & Telemetri")
+
 header_c1, header_c2 = st.columns([2.2, 1.2])
 
 with header_c1:
     st.markdown(
         "".join([
             '<div style="margin-bottom: 14px;">',
-            '<h1 style="color: #111827; font-size: 1.75rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">',
+            '<h1 style="color: #111827; font-size: 1.65rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">',
             'Detail &amp; Profil Operasional Mesin',
             '</h1>',
             '<div style="font-size: 12px; font-weight: 500; color: #6B7280; letter-spacing: 0.02em;">',

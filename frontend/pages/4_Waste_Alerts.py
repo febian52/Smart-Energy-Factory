@@ -16,10 +16,10 @@ for p in (str(CURRENT_DIR.parent), str(ROOT_DIR)):
 
 try:
     from frontend.api_client import get_machines, get_waste_alerts, get_data_range
-    from frontend.ui import apply_theme, style_plotly_fig, create_type_donut
+    from frontend.ui import apply_theme, style_plotly_fig, create_type_donut, render_dentexa_topbar
 except ImportError:
     from api_client import get_machines, get_waste_alerts, get_data_range
-    from ui import apply_theme, style_plotly_fig, create_type_donut
+    from ui import apply_theme, style_plotly_fig, create_type_donut, render_dentexa_topbar
 
 try:
     st.set_page_config(
@@ -67,10 +67,12 @@ except Exception as exc:
 # ---------------------------------------------------------------------------
 # Header Halaman (Dentexa Clean Header)
 # ---------------------------------------------------------------------------
+render_dentexa_topbar(page_title="Waste Alerts", welcome_sub="Deteksi Anomali Pemborosan Energi")
+
 st.markdown(
     """
-    <div style="margin-bottom: 24px;">
-        <h1 style="color: #111827; font-size: 1.75rem; font-weight: 700; margin: 0 0 6px 0; letter-spacing: -0.02em;">
+    <div style="margin-bottom: 22px;">
+        <h1 style="color: #111827; font-size: 1.65rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">
             Peringatan Pemborosan Energi (Waste Alerts)
         </h1>
         <p style="color: #6B7280; font-size: 0.88rem; margin: 0; max-width: 850px; line-height: 1.5;">

@@ -512,11 +512,13 @@ def create_status_donut(
     run_kwh: float,
     idle_kwh: float,
     off_kwh: float,
-    height: int = 210,
+    total_label: str = "Total Energi",
+    total_val_str: Optional[str] = None,
+    height: int = 215,
 ) -> go.Figure:
     """
     Membuat Donut Chart sebaran status operasional (Running, Idle, Off)
-    bergaya 'Expenses' Dentexa dengan warna konsisten.
+    bergaya 'Expenses' Dentexa dengan cutout di tengah berisi total nilai dan legend di kanan.
     """
     labels = ["Running", "Idle", "Off"]
     values = [run_kwh, idle_kwh, off_kwh]
@@ -526,8 +528,9 @@ def create_status_donut(
         go.Pie(
             labels=labels,
             values=values,
-            hole=0.68,
-            marker=dict(colors=colors, line=dict(color="#FFFFFF", width=2)),
+            hole=0.72,
+            domain={"x": [0.0, 0.65], "y": [0.0, 1.0]},
+            marker=dict(colors=colors, line=dict(color="#FFFFFF", width=2.5)),
             textinfo="none",
             hoverinfo="label+percent+value",
             hovertemplate="<b>%{label}</b><br>Energi: %{value:,.1f} kWh<br>Porsi: <b>%{percent:.1%}</b><extra></extra>",
@@ -536,6 +539,17 @@ def create_status_donut(
         )
     )
 
+    # Tambahkan anotasi di tengah cutout donut seperti kartu Expenses Dentexa
+    if total_val_str:
+        fig.add_annotation(
+            text=f"<span style='font-size:10px;color:#6B7280;font-weight:600;text-transform:uppercase;'>{total_label}</span><br><b style='font-size:15px;color:#111827;font-weight:800;'>{total_val_str}</b>",
+            x=0.325,
+            y=0.5,
+            showarrow=False,
+            align="center",
+            font=dict(family="Inter, sans-serif"),
+        )
+
     fig.update_layout(
         showlegend=True,
         legend=dict(
@@ -543,15 +557,51 @@ def create_status_donut(
             yanchor="middle",
             y=0.5,
             xanchor="left",
-            x=1.02,
-            font=dict(size=11, color="#6B7280"),
+            x=0.68,
+            font=dict(size=11, color="#111827", family="Inter, sans-serif"),
+            itemwidth=30,
         ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         height=height,
-        margin=dict(l=10, r=10, t=10, b=10),
+        margin=dict(l=5, r=5, t=5, b=5),
     )
     return fig
+
+
+def render_dentexa_topbar(page_title: str = "Dashboard", welcome_sub: str = "Monitoring & Efisiensi Energi Pabrik"):
+    """
+    Merender Topbar Header ala Dentexa SaaS Dashboard:
+    - Kiri: Navigasi Halaman
+    - Tengah: Search Bar Pill Rounded
+    - Kanan: Quick Actions & Profile Operator
+    """
+    topbar_html = "".join([
+        '<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0 16px 0; border-bottom:1px solid #E5E8EF; margin-bottom:20px;">',
+        '  <div style="display:flex; align-items:center; gap:10px;">',
+        '    <span style="font-size:12px; color:#6B7280; cursor:pointer;">&lsaquo;</span>',
+        f'    <span style="font-size:1.15rem; font-weight:700; color:#111827; letter-spacing:-0.01em;">{page_title}</span>',
+        '  </div>',
+        '  <div style="flex:1; max-width:440px; margin:0 24px;">',
+        '    <div style="display:flex; align-items:center; background:#FFFFFF; border:1px solid #E5E8EF; border-radius:30px; padding:6px 16px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">',
+        '      <span style="color:#9CA3AF; margin-right:8px; font-size:13px;">🔍</span>',
+        '      <span style="color:#9CA3AF; font-size:12px; font-weight:400;">Cari mesin, lini, atau anomali...</span>',
+        '    </div>',
+        '  </div>',
+        '  <div style="display:flex; align-items:center; gap:14px;">',
+        '    <div style="display:flex; align-items:center; justify-content:center; width:32px; height:32px; background:#111827; color:#FFFFFF; border-radius:50%; font-size:16px; font-weight:600; cursor:pointer;">+</div>',
+        '    <div style="font-size:15px; color:#6B7280; cursor:pointer;">⚡</div>',
+        '    <div style="display:flex; align-items:center; gap:8px; padding-left:8px; border-left:1px solid #E5E8EF;">',
+        '      <div style="width:32px; height:32px; border-radius:50%; background:#DBEAFE; color:#1D6FF2; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px;">OP</div>',
+        '      <div style="line-height:1.2;">',
+        '        <div style="font-size:12px; font-weight:700; color:#111827;">Tim Operator</div>',
+        '        <div style="font-size:11px; color:#6B7280;">Super Admin</div>',
+        '      </div>',
+        '    </div>',
+        '  </div>',
+        '</div>',
+    ])
+    st.markdown(topbar_html, unsafe_allow_html=True)
 
 
 def create_type_donut(type_counts: Dict[str, int], height: int = 260) -> go.Figure:

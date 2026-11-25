@@ -26,6 +26,7 @@ try:
         style_plotly_fig,
         format_id_num,
         format_id_currency,
+        render_dentexa_topbar,
     )
 except ImportError:
     import api_client as ac
@@ -41,6 +42,7 @@ except ImportError:
         style_plotly_fig,
         format_id_num,
         format_id_currency,
+        render_dentexa_topbar,
     )
 
 # Model ML memprediksi hingga 168 jam secara autoregresif (168 langkah inferensi).
@@ -111,9 +113,11 @@ with ctrl_c2:
     selected_hours = 24 if horizon_label == "24 Jam" else 168
 
 # Header Halaman Bersih & Dinamis (Dentexa Style)
+render_dentexa_topbar(page_title="Forecast", welcome_sub="Prediksi Konsumsi Beban Energi")
+
 header_title_html = "".join([
-    '<div style="margin: 12px 0 16px 0;">',
-    '<h1 style="color: #111827; font-size: 1.75rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">',
+    '<div style="margin: 10px 0 16px 0;">',
+    '<h1 style="color: #111827; font-size: 1.65rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">',
     'Forecast Konsumsi Energi',
     '</h1>',
     '<div style="font-size: 12px; font-weight: 500; color: #6B7280; letter-spacing: 0.02em;">',
