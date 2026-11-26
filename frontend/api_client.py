@@ -251,6 +251,9 @@ def _normalize_waste(raw, machine_id: str, start, end) -> dict:
 
     Kolom yang dijamin ada di setiap item:
       machine_id, timestamp, type, severity, note
+
+    Field opsional (kalau dikirim backend) ikut diteruskan:
+      power_kw, energy_kwh
     """
     items = None
 
@@ -270,13 +273,17 @@ def _normalize_waste(raw, machine_id: str, start, end) -> dict:
     for item in items:
         if not isinstance(item, dict):
             continue
-        normalized.append({
+        entry = {
             "machine_id": item.get("machine_id", machine_id),
             "timestamp":  str(item.get("timestamp") or item.get("time") or ""),
             "type":       item.get("type") or item.get("alert_type") or "unknown",
             "severity":   item.get("severity") or item.get("level") or "unknown",
             "note":       item.get("note") or item.get("message") or item.get("description") or "",
-        })
+        }
+        for extra in ("power_kw", "energy_kwh"):
+            if item.get(extra) is not None:
+                entry[extra] = item[extra]
+        normalized.append(entry)
 
     return {"alerts": normalized, "is_mock": False}
 
@@ -327,6 +334,8 @@ def get_energy(
     GET /energy
     machine_id wajib; start & end selalu dikirim; limit per request max 10 000.
     Jika limit > 10.000 atau page_all=True, lakukan paging timestamp otomatis.
+    page_all=True mengambil seluruh rentang (batas aman 200.000 baris), bukan
+    berhenti di nilai `limit` yang dikirim pemanggil.
 
     Setiap item: machine_id, timestamp, power_kw, energy_kwh,
                  voltage, current, status
@@ -346,11 +355,14 @@ def get_energy(
         }
         return _get("/energy", params=params, timeout=timeout)  # type: ignore[return-value]
 
-    # Timestamp-based paging jika meminta lebih dari batas keras 10.000 baris
+    # Timestamp-based paging jika meminta lebih dari batas keras 10.000 baris.
+    # page_all=True mengambil seluruh rentang (dengan batas aman 200.000 baris),
+    # bukan berhenti di nilai `limit` yang dikirim pemanggil.
     all_rows: list[dict] = []
     cur_start = start
-    while True:
-        chunk_limit = min(10_000, limit - len(all_rows))
+    max_rows = 200_000 if page_all else limit
+    while len(all_rows) < max_rows:
+        chunk_limit = min(10_000, max_rows - len(all_rows))
         params = {
             "machine_id": machine_id,
             "start": cur_start.isoformat(),
@@ -361,7 +373,7 @@ def get_energy(
         if not raw or not isinstance(raw, list):
             break
         all_rows.extend(raw)
-        if len(raw) < chunk_limit or len(all_rows) >= limit:
+        if len(raw) < chunk_limit:
             break
         last_dt = datetime.fromisoformat(raw[-1]["timestamp"])
         cur_start = last_dt + timedelta(seconds=1)

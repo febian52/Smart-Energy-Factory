@@ -189,7 +189,7 @@ if not _required_cols.issubset(df_preds.columns):
     _missing = _required_cols - set(df_preds.columns)
     st.error(
         f"🚨 **Format respons /forecast berubah — field hilang: `{_missing}`.**\n\n"
-        "Hubungi tim backend (Didi) untuk memastikan kolom `forecast_time` dan `predicted_kwh` tersedia.",
+        "Hubungi tim backend untuk memastikan kolom `forecast_time` dan `predicted_kwh` tersedia.",
         icon="🚫",
     )
     st.stop()
@@ -401,3 +401,95 @@ st.markdown(
     ]),
     unsafe_allow_html=True,
 )
+
+
+# ---------------------------------------------------------------------------
+# Performa Model Forecast (Evaluasi Offline)
+# ---------------------------------------------------------------------------
+st.markdown("<div style='margin:1.2rem 0;'></div>", unsafe_allow_html=True)
+
+with st.expander("📊 Performa Model Forecast (Evaluasi Offline)"):
+    _eval_path = ROOT_DIR / "ml" / "forecast" / "hasil_evaluasi.csv"
+    _horizon_path = ROOT_DIR / "ml" / "forecast" / "hasil_evaluasi_horizon.csv"
+
+    try:
+        _df_eval = pd.read_csv(_eval_path)
+    except Exception as exc:
+        st.caption(f"File evaluasi model tidak ditemukan atau tidak bisa dibaca: {exc}")
+    else:
+        st.markdown(
+            "".join([
+                '<div style="font-size:12px; color:#6B7280; margin-bottom:8px; line-height:1.5;">',
+                'Metrik evaluasi pada data uji. Model yang dipakai di aplikasi: <b>XGBoost</b>. '
+                'MAE/RMSE dalam <b>kWh per jam</b>.',
+                '</div>',
+            ]),
+            unsafe_allow_html=True,
+        )
+
+        _eval_rows = []
+        for _, _r in _df_eval.iterrows():
+            _is_used = str(_r["model"]).lower() == "xgboost"
+            _row_style = ' style="background:#EFF6FF;"' if _is_used else ""
+            _used_badge = ' <span class="badge-pill-blue">Dipakai</span>' if _is_used else ""
+            _eval_rows.append(
+                f'<tr{_row_style}>'
+                f'<td style="font-weight:600; color:#111827;">{_r["model"]}{_used_badge}</td>'
+                f'<td>{format_id_num(float(_r["MAE"]), 2)}</td>'
+                f'<td>{format_id_num(float(_r["RMSE"]), 2)}</td>'
+                f'<td>{format_id_num(float(_r["MAPE_%"]), 1)}%</td>'
+                f'<td>{format_id_num(float(_r["WAPE_%"]), 1)}%</td>'
+                '</tr>'
+            )
+
+        st.markdown(
+            "".join([
+                '<div class="data-table-container"><div style="overflow-x:auto;">',
+                '<table class="data-table">',
+                '<thead><tr><th>Model</th><th>MAE (kWh)</th><th>RMSE (kWh)</th><th>MAPE (%)</th><th>WAPE (%)</th></tr></thead>',
+                '<tbody>',
+                "".join(_eval_rows),
+                '</tbody></table></div></div>',
+            ]),
+            unsafe_allow_html=True,
+        )
+
+        try:
+            _df_horizon = pd.read_csv(_horizon_path)
+        except Exception:
+            _df_horizon = None
+
+        if _df_horizon is not None and not _df_horizon.empty:
+            _horizon_rows = []
+            for _, _r in _df_horizon.iterrows():
+                _xgb_mae = float(_r.get("XGBoost", 0.0))
+                _naive_mae = float(_r.get("SeasonalNaive(168h)", 0.0))
+                _improvement = ((_naive_mae - _xgb_mae) / _naive_mae * 100) if _naive_mae else 0.0
+                _horizon_rows.append(
+                    f'<tr>'
+                    f'<td style="font-weight:600; color:#111827;">{_r["bucket"]}</td>'
+                    f'<td>{format_id_num(_xgb_mae, 2)}</td>'
+                    f'<td>{format_id_num(_naive_mae, 2)}</td>'
+                    f'<td>{format_id_num(_improvement, 1)}%</td>'
+                    '</tr>'
+                )
+
+            st.markdown(
+                "".join([
+                    '<div style="font-size:12px; color:#6B7280; margin:14px 0 6px 0; line-height:1.5;">',
+                    '<b>MAE per horizon</b> — perbandingan XGBoost vs baseline Seasonal Naive.',
+                    '</div>',
+                    '<div class="data-table-container"><div style="overflow-x:auto;">',
+                    '<table class="data-table">',
+                    '<thead><tr><th>Horizon</th><th>XGBoost MAE</th><th>Seasonal Naive MAE</th><th>XGBoost lebih baik</th></tr></thead>',
+                    '<tbody>',
+                    "".join(_horizon_rows),
+                    '</tbody></table></div></div>',
+                ]),
+                unsafe_allow_html=True,
+            )
+
+        st.caption(
+            "MAPE bisa terlihat tinggi karena banyak jam dengan konsumsi rendah; "
+            "WAPE lebih representatif untuk beban yang tidak rata."
+        )

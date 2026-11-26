@@ -1,4 +1,6 @@
 import sys
+import json
+import re
 from pathlib import Path
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -16,11 +18,35 @@ for p in (str(CURRENT_DIR.parent), str(ROOT_DIR)):
         sys.path.insert(0, p)
 
 try:
-    from frontend.api_client import get_machines, get_waste_alerts, get_data_range
-    from frontend.ui import apply_theme, style_plotly_fig, create_type_donut, format_id_num
+    from frontend.api_client import (
+        get_machines,
+        get_waste_alerts,
+        get_data_range,
+        get_energy,
+        TARIF_PER_KWH,
+    )
+    from frontend.ui import (
+        apply_theme,
+        style_plotly_fig,
+        create_type_donut,
+        format_id_num,
+        format_id_currency,
+    )
 except ImportError:
-    from api_client import get_machines, get_waste_alerts, get_data_range
-    from ui import apply_theme, style_plotly_fig, create_type_donut, format_id_num
+    from api_client import (
+        get_machines,
+        get_waste_alerts,
+        get_data_range,
+        get_energy,
+        TARIF_PER_KWH,
+    )
+    from ui import (
+        apply_theme,
+        style_plotly_fig,
+        create_type_donut,
+        format_id_num,
+        format_id_currency,
+    )
 
 try:
     st.set_page_config(
@@ -165,6 +191,39 @@ def load_waste_alerts_parallel(target_machines_tuple: tuple[str, ...], s_iso: st
     return all_alerts, is_mock_flag, failed_machines, success_machines
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def load_alert_energy_parallel(target_machines_tuple: tuple[str, ...], s_iso: str, e_iso: str):
+    """Ambil energi per interval untuk mesin yang punya alert (paralel).
+
+    Hanya dipakai untuk mencocokkan timestamp alert dengan `energy_kwh` aktual.
+    Jika gagal/kosong, pemanggil akan memakai estimasi dari daya sesaat.
+    """
+    s = datetime.fromisoformat(s_iso)
+    e = datetime.fromisoformat(e_iso)
+    out: list[tuple[str, str, float]] = []
+
+    def _fetch_one(mid: str):
+        rows = get_energy(mid, start=s, end=e, limit=10_000, page_all=True, timeout=45)
+        return mid, rows
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs = {ex.submit(_fetch_one, mid): mid for mid in target_machines_tuple}
+        for fut in as_completed(futs):
+            mid = futs[fut]
+            try:
+                _, rows = fut.result()
+            except Exception:
+                continue
+            for r in rows or []:
+                ts = r.get("timestamp")
+                kwh = r.get("energy_kwh")
+                if ts is None or kwh is None:
+                    continue
+                out.append((mid, str(ts), float(kwh)))
+
+    return out
+
+
 target_machines = [m["machine_id"] for m in machines] if sel_machine == "Semua Mesin" else [sel_machine]
 
 with st.spinner("Memuat data peringatan pemborosan (waste alerts)..."):
@@ -244,6 +303,86 @@ if df_alerts.empty:
         unsafe_allow_html=True,
     )
     st.stop()
+
+
+# ---------------------------------------------------------------------------
+# 3b. Estimasi energi & biaya pada interval anomali
+# ---------------------------------------------------------------------------
+def _to_naive_utc(series: pd.Series) -> pd.Series:
+    """Timestamp -> naive UTC, agar bisa dicocokkan dengan respons /energy."""
+    return pd.to_datetime(series, utc=True).dt.tz_localize(None)
+
+
+_alert_ts_naive = _to_naive_utc(df_alerts["timestamp"])
+_alert_machines = tuple(sorted(df_alerts["machine_id"].astype(str).unique()))
+
+# Jovan (branch feature/ml-anomaly) sudah mengirim energy_kwh per alert.
+# Kalau tersedia, pakai langsung -> tidak perlu request /energy tambahan.
+_has_api_energy = (
+    "energy_kwh" in df_alerts.columns and df_alerts["energy_kwh"].notna().any()
+)
+_has_api_power = (
+    "power_kw" in df_alerts.columns and df_alerts["power_kw"].notna().any()
+)
+_api_energy = (
+    pd.to_numeric(df_alerts["energy_kwh"], errors="coerce")
+    if _has_api_energy
+    else pd.Series(pd.NA, index=df_alerts.index, dtype="Float64")
+)
+
+_energy_map: dict[tuple[str, pd.Timestamp], float] = {}
+_energy_source: list[str] = []
+
+# Fallback lama: join timestamp -> /energy, hanya untuk baris tanpa energy_kwh.
+if _api_energy.isna().any() and _alert_machines:
+    _span_days = (_alert_ts_naive.max() - _alert_ts_naive.min()).total_seconds() / 86400
+    # Batas aman: rentang sangat panjang pakai fallback (tanpa request tambahan).
+    if _span_days <= 45:
+        _q_start = (_alert_ts_naive.min() - timedelta(minutes=5)).to_pydatetime()
+        _q_end = (_alert_ts_naive.max() + timedelta(minutes=5)).to_pydatetime()
+        with st.spinner("Menghitung energi pada interval anomali..."):
+            _energy_rows = load_alert_energy_parallel(
+                _alert_machines, _q_start.isoformat(), _q_end.isoformat()
+            )
+        for _mid, _ts, _kwh in _energy_rows:
+            _key_ts = pd.Timestamp(_ts)
+            if _key_ts.tzinfo is not None:
+                _key_ts = _key_ts.tz_convert("UTC").tz_localize(None)
+            _energy_map[(_mid, _key_ts)] = _kwh
+
+
+def _row_energy_kwh(row) -> float:
+    """Prioritas: energy_kwh dari API -> join /energy -> power_kw -> teks note."""
+    api_val = _api_energy.loc[row.name]
+    if pd.notna(api_val):
+        _energy_source.append("api")
+        return float(api_val)
+    actual = _energy_map.get((str(row["machine_id"]), row["_ts_naive"]))
+    if actual is not None:
+        _energy_source.append("actual")
+        return float(actual)
+    if _has_api_power:
+        power_val = pd.to_numeric(row.get("power_kw"), errors="coerce")
+        if pd.notna(power_val):
+            _energy_source.append("power")
+            return float(power_val) * (5.0 / 60.0)
+    match = re.search(r"([\d.]+)\s*kW", str(row.get("note", "")))
+    if match:
+        _energy_source.append("fallback")
+        return float(match.group(1)) * (5.0 / 60.0)
+    _energy_source.append("unknown")
+    return 0.0
+
+
+df_alerts["_ts_naive"] = _alert_ts_naive
+df_alerts["energy_kwh_alert"] = df_alerts.apply(_row_energy_kwh, axis=1)
+df_alerts["cost_rp_alert"] = df_alerts["energy_kwh_alert"] * TARIF_PER_KWH
+df_alerts = df_alerts.drop(columns=["_ts_naive"])
+
+alert_energy_kwh = float(df_alerts["energy_kwh_alert"].sum())
+alert_cost_rp = float(df_alerts["cost_rp_alert"].sum())
+alert_energy_matched = _energy_source.count("api") + _energy_source.count("actual")
+alert_energy_total = int(len(df_alerts))
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +482,51 @@ with tab_aktif:
             unsafe_allow_html=True,
         )
 
+    # --- Estimasi energi & biaya pada interval anomali ---
+    if alert_energy_kwh > 0:
+        st.markdown("<div style='margin:14px 0 0 0;'></div>", unsafe_allow_html=True)
+        k_energy, k_cost = st.columns(2)
+
+        with k_energy:
+            st.markdown(
+                "".join([
+                    '<div class="kpi-card" style="height:100%;">',
+                    '<div class="kpi-label">Energi pada Interval Anomali</div>',
+                    f'<div><span class="kpi-val">{format_id_num(alert_energy_kwh, 1)}</span><span class="kpi-unit">kWh</span></div>',
+                    f'<div class="kpi-sub"><span class="badge-pill-blue">{format_id_num(alert_energy_total, 0)} kasus</span></div>',
+                    '</div>',
+                ]),
+                unsafe_allow_html=True,
+            )
+
+        with k_cost:
+            st.markdown(
+                "".join([
+                    '<div class="kpi-card" style="height:100%;">',
+                    '<div class="kpi-label">Estimasi Biaya Energi Anomali</div>',
+                    f'<div><span class="kpi-val" style="font-size:1.6rem; white-space:nowrap;">{format_id_currency(alert_cost_rp)}</span></div>',
+                    f'<div class="kpi-sub"><span class="badge-pill-amber">Tarif {format_id_currency(TARIF_PER_KWH)}/kWh</span></div>',
+                    '</div>',
+                ]),
+                unsafe_allow_html=True,
+            )
+
+        _fallback_note = ""
+        if alert_energy_matched < alert_energy_total:
+            _fallback_note = (
+                f" {format_id_num(alert_energy_total - alert_energy_matched, 0)} kasus diestimasi "
+                f"dari daya sesaat × interval 5 menit."
+            )
+        st.caption(
+            "Estimasi dihitung dari konsumsi listrik pada interval yang ditandai anomali, "
+            "bukan selisih terhadap baseline normal." + _fallback_note
+        )
+    else:
+        st.caption(
+            "ℹ️ Estimasi energi & biaya belum tersedia untuk data ini "
+            "(field energi/daya tidak ditemukan pada respons alert)."
+        )
+
     st.markdown("<div style='margin:1.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
 
     # Tabel Alert HTML (Max 100 Baris) + Unduh CSV
@@ -358,8 +542,23 @@ with tab_aktif:
 
     with tbl_btn:
         csv_buf = io.StringIO()
-        export_df = df_alerts[["timestamp_wib", "machine_id", "type", "severity", "note"]].copy()
+        export_df = df_alerts[
+            [
+                "timestamp_wib",
+                "machine_id",
+                "type",
+                "severity",
+                "energy_kwh_alert",
+                "cost_rp_alert",
+                "note",
+            ]
+        ].copy()
         export_df["timestamp_wib"] = export_df["timestamp_wib"].dt.strftime("%Y-%m-%d %H:%M WIB")
+        export_df = export_df.rename(
+            columns={"energy_kwh_alert": "energy_kwh", "cost_rp_alert": "estimasi_biaya_rp"}
+        )
+        export_df["energy_kwh"] = export_df["energy_kwh"].round(3)
+        export_df["estimasi_biaya_rp"] = export_df["estimasi_biaya_rp"].round(0).astype(int)
         export_df.to_csv(csv_buf, index=False)
         st.download_button(
             label="⬇ Unduh Semua CSV",
@@ -565,6 +764,26 @@ with tab_analisis:
                 "desc": "Mesin aktif running tanpa ada pencatatan hasil kerja pada shift kerja berjalan.",
                 "color": "#6366F1",
             },
+            "idle_high_power": {
+                "title": "Idle High Power",
+                "desc": "Mesin idle namun masih menyerap daya ≥25% dari rated power.",
+                "color": "#F59E0B",
+            },
+            "spike": {
+                "title": "Lonjakan Daya (Spike)",
+                "desc": "Daya melampaui kapasitas normal atau rated power mesin.",
+                "color": "#EF4444",
+            },
+            "off_standby_leakage": {
+                "title": "Kebocoran Daya Saat Off",
+                "desc": "Mesin berstatus off tetapi terdeteksi penyerapan daya; cek saklar utama atau sensor arus.",
+                "color": "#8B5CF6",
+            },
+            "unusual_power_deviation": {
+                "title": "Deviasi Pola Daya",
+                "desc": "Pola daya menyimpang dari kebiasaan pada status mesin tersebut.",
+                "color": "#0EA5E9",
+            },
         }
         FALLBACK_COLORS = ["#1D6FF2", "#F59E0B", "#EF4444", "#6366F1", "#16A34A", "#0EA5E9"]
 
@@ -603,3 +822,73 @@ with tab_analisis:
                         ]),
                         unsafe_allow_html=True,
                     )
+
+
+# ---------------------------------------------------------------------------
+# Performa Model Anomali (Evaluasi Offline)
+# ---------------------------------------------------------------------------
+st.markdown("<div style='margin:1.2rem 0;'></div>", unsafe_allow_html=True)
+
+with st.expander("📊 Performa Model Deteksi Anomali (Evaluasi Offline)"):
+    _eval_path = ROOT_DIR / "ml" / "anomaly" / "eval_summary.json"
+
+    try:
+        with open(_eval_path, "r", encoding="utf-8") as _f:
+            _eval = json.load(_f)
+    except Exception as exc:
+        st.caption(f"File evaluasi model tidak ditemukan atau tidak bisa dibaca: {exc}")
+    else:
+        _precision = float(_eval.get("precision", 0.0))
+        _recall = float(_eval.get("recall", 0.0))
+        _f1 = float(_eval.get("f1_score", 0.0))
+        _cm = _eval.get("confusion_matrix") or [[0, 0], [0, 0]]
+        _tn, _fp = _cm[0]
+        _fn, _tp = _cm[1]
+
+        _metric_cols = st.columns(3)
+        _metric_specs = [
+            ("Precision", _precision, "badge-pill-blue"),
+            ("Recall", _recall, "badge-pill-green"),
+            ("F1-Score", _f1, "badge-pill-amber"),
+        ]
+        for _col, (_label, _value, _badge_cls) in zip(_metric_cols, _metric_specs):
+            with _col:
+                st.markdown(
+                    "".join([
+                        '<div class="kpi-card" style="height:100%;">',
+                        f'<div class="kpi-label">{_label}</div>',
+                        f'<div><span class="kpi-val">{format_id_num(_value * 100, 1)}</span><span class="kpi-unit">%</span></div>',
+                        f'<div class="kpi-sub"><span class="{_badge_cls}">Evaluasi data uji</span></div>',
+                        '</div>',
+                    ]),
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown(
+            "".join([
+                '<div style="font-size:12px; color:#6B7280; margin:10px 0 6px 0; line-height:1.5;">',
+                f'Isolation Forest dengan <b>contamination {format_id_num(float(_eval.get("contamination", 0.0)) * 100, 0)}%</b> · ',
+                f'<b>{format_id_num(_eval.get("detected_anomalies", 0), 0)}</b> anomali terdeteksi dari ',
+                f'<b>{format_id_num(_eval.get("total_rows", 0), 0)}</b> baris data uji.',
+                '</div>',
+            ]),
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            "".join([
+                '<div class="data-table-container"><div style="overflow-x:auto;">',
+                '<table class="data-table">',
+                '<thead><tr><th>Confusion Matrix</th><th>Prediksi Normal</th><th>Prediksi Anomali</th></tr></thead>',
+                '<tbody>',
+                f'<tr><td style="font-weight:600; color:#111827;">Aktual Normal</td><td>{format_id_num(_tn, 0)} (TN)</td><td>{format_id_num(_fp, 0)} (FP)</td></tr>',
+                f'<tr><td style="font-weight:600; color:#111827;">Aktual Anomali</td><td>{format_id_num(_fn, 0)} (FN)</td><td>{format_id_num(_tp, 0)} (TP)</td></tr>',
+                '</tbody></table></div></div>',
+            ]),
+            unsafe_allow_html=True,
+        )
+
+        st.caption(
+            "Metrik dihitung pada data uji berlabel (ground truth), bukan data produksi. "
+            "Model yang dipakai: Isolation Forest."
+        )
