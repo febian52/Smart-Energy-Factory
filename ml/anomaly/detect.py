@@ -100,12 +100,26 @@ def _build_recommendation(row: pd.Series) -> tuple[str, str, str]:
             f"Mesin {machine_label} beroperasi ({power_kw:.2f} kW) tanpa output produksi tercatat. "
             f"Cek jadwal shift atau matikan mesin bila tidak ada antrean kerja."
         )
-    else:
-        severity = "high" if ratio_pct > 100.0 else "medium"
+    elif ratio_pct > 100.0 or power_kw > (rated_power * 1.05):
+        severity = "high" if ratio_pct > 120.0 else "medium"
         waste_type = "spike"
         note = (
             f"Terdeteksi lonjakan konsumsi daya tidak wajar ({power_kw:.2f} kW, "
             f"{ratio_pct:.1f}% dari daya terukur) pada mesin {machine_label}. Periksa kondisi beban/mesin."
+        )
+    elif status == "off":
+        severity = "low"
+        waste_type = "off_standby_leakage"
+        note = (
+            f"Mesin {machine_label} berstatus off namun terdeteksi anomali penyerapan daya "
+            f"({power_kw:.2f} kW). Periksa saklar daya utama atau sensor arus."
+        )
+    else:
+        severity = "medium"
+        waste_type = "unusual_power_deviation"
+        note = (
+            f"Terdeteksi deviasi pola daya abnormal ({power_kw:.2f} kW, "
+            f"{ratio_pct:.1f}% dari daya terukur) pada status {status} di mesin {machine_label}."
         )
 
     return waste_type, severity, note
@@ -185,6 +199,13 @@ def detect_waste(
     results: list[dict[str, Any]] = []
     for _, row in anomalies.iterrows():
         waste_type, severity, note = _build_recommendation(row)
+        p_kw = round(float(row.get("power_kw", 0.0)), 3)
+        e_kwh = row.get("energy_kwh")
+        if e_kwh is not None and not pd.isna(e_kwh):
+            e_kwh = round(float(e_kwh), 5)
+        else:
+            e_kwh = round(p_kw * (5.0 / 60.0), 5)
+
         results.append(
             {
                 "machine_id": row["machine_id"],
@@ -192,6 +213,8 @@ def detect_waste(
                 "type": waste_type,
                 "severity": severity,
                 "note": note,
+                "power_kw": p_kw,
+                "energy_kwh": e_kwh,
             }
         )
 
