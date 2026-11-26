@@ -73,7 +73,7 @@ Catatan: reproduksibilitas penuh butuh versi numpy yang sama. Kalau beda versi, 
 > "Model XGBoost memprediksi 24 jam sampai 7 hari ke depan. Garis biru data aktual 72 jam terakhir, garis amber prediksi. Model dilatih **direct multi-horizon**, jadi error tidak menumpuk. Evaluasi offline: **MAE 6,40 kWh/jam**, **WAPE 30,4%**, lebih baik dari baseline Seasonal Naive 7,36."
 
 ### Waste Alerts (7:00)
-> "Halaman ini mendeteksi anomali. Isolation Forest menemukan pola menyimpang, lalu aturan kami memberi tipe dan severity. Contoh: mesin idle dengan daya di atas 25% rated power masuk **idle high power**."
+> "Halaman ini mendeteksi anomali. Isolation Forest menemukan pola menyimpang, lalu aturan kami memberi tipe dan severity. Tipe yang kami bedakan: **idle high power**, **spike**, **running tanpa produksi**, **kebocoran daya saat off**, dan **deviasi pola daya**. Contoh: mesin idle dengan daya di atas 25% rated power masuk **idle high power**."
 
 > "Dari 748 kasus di 7 hari, total energi pada interval anomali **1.759,0 kWh** atau setara **Rp 2.638.441**. Angka ini konsumsi listrik saat anomali terjadi, bukan selisih terhadap baseline normal — jadi kami sebut estimasi biaya, bukan klaim kerugian bersih."
 

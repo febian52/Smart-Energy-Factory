@@ -251,6 +251,9 @@ def _normalize_waste(raw, machine_id: str, start, end) -> dict:
 
     Kolom yang dijamin ada di setiap item:
       machine_id, timestamp, type, severity, note
+
+    Field opsional (kalau dikirim backend) ikut diteruskan:
+      power_kw, energy_kwh
     """
     items = None
 
@@ -270,13 +273,17 @@ def _normalize_waste(raw, machine_id: str, start, end) -> dict:
     for item in items:
         if not isinstance(item, dict):
             continue
-        normalized.append({
+        entry = {
             "machine_id": item.get("machine_id", machine_id),
             "timestamp":  str(item.get("timestamp") or item.get("time") or ""),
             "type":       item.get("type") or item.get("alert_type") or "unknown",
             "severity":   item.get("severity") or item.get("level") or "unknown",
             "note":       item.get("note") or item.get("message") or item.get("description") or "",
-        })
+        }
+        for extra in ("power_kw", "energy_kwh"):
+            if item.get(extra) is not None:
+                entry[extra] = item[extra]
+        normalized.append(entry)
 
     return {"alerts": normalized, "is_mock": False}
 

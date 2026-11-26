@@ -314,34 +314,58 @@ def _to_naive_utc(series: pd.Series) -> pd.Series:
 
 
 _alert_ts_naive = _to_naive_utc(df_alerts["timestamp"])
-_energy_map: dict[tuple[str, pd.Timestamp], float] = {}
 _alert_machines = tuple(sorted(df_alerts["machine_id"].astype(str).unique()))
-_span_days = (_alert_ts_naive.max() - _alert_ts_naive.min()).total_seconds() / 86400
 
-# Batas aman: rentang sangat panjang pakai fallback (tanpa request energi tambahan).
-if _alert_machines and _span_days <= 45:
-    _q_start = (_alert_ts_naive.min() - timedelta(minutes=5)).to_pydatetime()
-    _q_end = (_alert_ts_naive.max() + timedelta(minutes=5)).to_pydatetime()
-    with st.spinner("Menghitung energi pada interval anomali..."):
-        _energy_rows = load_alert_energy_parallel(
-            _alert_machines, _q_start.isoformat(), _q_end.isoformat()
-        )
-    for _mid, _ts, _kwh in _energy_rows:
-        _key_ts = pd.Timestamp(_ts)
-        if _key_ts.tzinfo is not None:
-            _key_ts = _key_ts.tz_convert("UTC").tz_localize(None)
-        _energy_map[(_mid, _key_ts)] = _kwh
+# Jovan (branch feature/ml-anomaly) sudah mengirim energy_kwh per alert.
+# Kalau tersedia, pakai langsung -> tidak perlu request /energy tambahan.
+_has_api_energy = (
+    "energy_kwh" in df_alerts.columns and df_alerts["energy_kwh"].notna().any()
+)
+_has_api_power = (
+    "power_kw" in df_alerts.columns and df_alerts["power_kw"].notna().any()
+)
+_api_energy = (
+    pd.to_numeric(df_alerts["energy_kwh"], errors="coerce")
+    if _has_api_energy
+    else pd.Series(pd.NA, index=df_alerts.index, dtype="Float64")
+)
 
-
+_energy_map: dict[tuple[str, pd.Timestamp], float] = {}
 _energy_source: list[str] = []
+
+# Fallback lama: join timestamp -> /energy, hanya untuk baris tanpa energy_kwh.
+if _api_energy.isna().any() and _alert_machines:
+    _span_days = (_alert_ts_naive.max() - _alert_ts_naive.min()).total_seconds() / 86400
+    # Batas aman: rentang sangat panjang pakai fallback (tanpa request tambahan).
+    if _span_days <= 45:
+        _q_start = (_alert_ts_naive.min() - timedelta(minutes=5)).to_pydatetime()
+        _q_end = (_alert_ts_naive.max() + timedelta(minutes=5)).to_pydatetime()
+        with st.spinner("Menghitung energi pada interval anomali..."):
+            _energy_rows = load_alert_energy_parallel(
+                _alert_machines, _q_start.isoformat(), _q_end.isoformat()
+            )
+        for _mid, _ts, _kwh in _energy_rows:
+            _key_ts = pd.Timestamp(_ts)
+            if _key_ts.tzinfo is not None:
+                _key_ts = _key_ts.tz_convert("UTC").tz_localize(None)
+            _energy_map[(_mid, _key_ts)] = _kwh
 
 
 def _row_energy_kwh(row) -> float:
-    """Energi aktual per alert; fallback daya sesaat x interval 5 menit."""
+    """Prioritas: energy_kwh dari API -> join /energy -> power_kw -> teks note."""
+    api_val = _api_energy.loc[row.name]
+    if pd.notna(api_val):
+        _energy_source.append("api")
+        return float(api_val)
     actual = _energy_map.get((str(row["machine_id"]), row["_ts_naive"]))
     if actual is not None:
         _energy_source.append("actual")
         return float(actual)
+    if _has_api_power:
+        power_val = pd.to_numeric(row.get("power_kw"), errors="coerce")
+        if pd.notna(power_val):
+            _energy_source.append("power")
+            return float(power_val) * (5.0 / 60.0)
     match = re.search(r"([\d.]+)\s*kW", str(row.get("note", "")))
     if match:
         _energy_source.append("fallback")
@@ -357,7 +381,7 @@ df_alerts = df_alerts.drop(columns=["_ts_naive"])
 
 alert_energy_kwh = float(df_alerts["energy_kwh_alert"].sum())
 alert_cost_rp = float(df_alerts["cost_rp_alert"].sum())
-alert_energy_matched = _energy_source.count("actual")
+alert_energy_matched = _energy_source.count("api") + _energy_source.count("actual")
 alert_energy_total = int(len(df_alerts))
 
 
@@ -739,6 +763,26 @@ with tab_analisis:
                 "title": "Running Tanpa Produksi",
                 "desc": "Mesin aktif running tanpa ada pencatatan hasil kerja pada shift kerja berjalan.",
                 "color": "#6366F1",
+            },
+            "idle_high_power": {
+                "title": "Idle High Power",
+                "desc": "Mesin idle namun masih menyerap daya ≥25% dari rated power.",
+                "color": "#F59E0B",
+            },
+            "spike": {
+                "title": "Lonjakan Daya (Spike)",
+                "desc": "Daya melampaui kapasitas normal atau rated power mesin.",
+                "color": "#EF4444",
+            },
+            "off_standby_leakage": {
+                "title": "Kebocoran Daya Saat Off",
+                "desc": "Mesin berstatus off tetapi terdeteksi penyerapan daya; cek saklar utama atau sensor arus.",
+                "color": "#8B5CF6",
+            },
+            "unusual_power_deviation": {
+                "title": "Deviasi Pola Daya",
+                "desc": "Pola daya menyimpang dari kebiasaan pada status mesin tersebut.",
+                "color": "#0EA5E9",
             },
         }
         FALLBACK_COLORS = ["#1D6FF2", "#F59E0B", "#EF4444", "#6366F1", "#16A34A", "#0EA5E9"]
