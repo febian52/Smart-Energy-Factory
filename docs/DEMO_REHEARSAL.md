@@ -5,6 +5,25 @@ Periode data demo: **24–30 Juni 2026 (WIB)** — dataset simulasi historis.
 
 ---
 
+## 0. Keputusan data: JANGAN regenerate (H-1)
+
+Dataset yang ada sekarang dipakai untuk semua angka, model, dan screenshot. Regenerate H-1 berisiko:
+
+- `--start-date` berbeda → hari-dalam-minggu dan pola libur bergeser, sehingga seluruh nilai data berubah.
+- Model forecast (Didi), model anomali (Jovan), metrik MAE/RMSE/WAPE dan precision/recall/F1, serta screenshot artikel dihitung dari data lama → jadi tidak cocok dengan dashboard.
+- `python -m database.generate_data` **tidak dijamin jalan**: file memakai `import db`, bukan import paket. Cek dulu kalau memang mau dipakai.
+- `HOLIDAYS` di generator hanya sampai Juni 2026.
+
+Kalau tim tetap mau regenerate: pakai DB terpisah (`smart_energy_demo`), arahkan backend ke DB itu, lalu latih ulang kedua model. Tidak realistis semalam.
+
+**Narasi resmi data (pakai ini kalau ditanya):**
+
+> "Dataset ini adalah dataset historis simulasi Januari–Juni 2026: 12 mesin, interval 5 menit, 622.080 pembacaan, dibangkitkan dengan seed tetap untuk reproduksibilitas. Jadi ini bukan data realtime pabrik."
+
+Catatan: reproduksibilitas penuh butuh versi numpy yang sama. Kalau beda versi, hasil bisa bergeser sedikit.
+
+---
+
 ## 1. Pre-flight (15 menit sebelum tampil)
 
 - [ ] MongoDB jalan
@@ -91,7 +110,7 @@ Periode data demo: **24–30 Juni 2026 (WIB)** — dataset simulasi historis.
 | Pertanyaan | Jawaban singkat |
 |---|---|
 | "Ini realtime?" | "Belum. Ini dataset historis simulasi Jan–Jun 2026. Arsitekturnya siap untuk streaming, tapi ingestion realtime belum diimplementasikan." |
-| "Datanya dari mana?" | "Generator simulasi 6 bulan, interval 5 menit, 12 mesin, disimpan di MongoDB." |
+| "Datanya dari mana?" | "Dataset historis simulasi Januari–Juni 2026: 12 mesin, interval 5 menit, 622.080 pembacaan, dibangkitkan dengan seed tetap untuk reproduksibilitas. Bukan data realtime pabrik." |
 | "Kenapa data terakhirnya Juni 2026?" | "Itu periode dataset simulasi yang kami pakai. Dashboard menampilkan periodenya secara eksplisit." |
 | "Akurasi forecast?" | "MAE 6,40 kWh/jam, WAPE 30,4%, lebih baik dari baseline Seasonal Naive 7,36." |
 | "MAPE kok 34%?" | "Banyak jam dengan konsumsi rendah, jadi persentase error besar. WAPE lebih representatif." |
@@ -128,6 +147,7 @@ Periode data demo: **24–30 Juni 2026 (WIB)** — dataset simulasi historis.
 ## 8. Jangan dilakukan saat demo
 
 - Jangan buka Swagger `/summary` — `alert_count`-nya 0 dan bisa bertentangan dengan dashboard.
+- Jangan regenerate data atau menjalankan generator saat rehearsal/demo.
 - Jangan bilang **"realtime"**.
 - Jangan melebarkan filter tanggal Detail Mesin terlalu jauh (aman 7 hari).
 - Jangan sebut angka anomali sebagai "kerugian bersih" tanpa menyebut baseline.
