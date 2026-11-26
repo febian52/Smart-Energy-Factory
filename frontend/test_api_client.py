@@ -83,7 +83,6 @@ def close(a, b, tol):
 LIMIT = 10_000        # batas keras backend per request
 TOL_KWH = 0.5         # toleransi konsistensi jumlah kWh
 TOL_COST_RP = 100     # toleransi konsistensi estimasi biaya (Rp)
-TARIFF_PER_KWH = 1500  # Rp per kWh (konstanta backend)
 TOL_AGG = 0.01        # toleransi kecil untuk cek konsistensi agregasi
 
 # ---------------------------------------------------------------------------
@@ -135,7 +134,7 @@ else:
         per_line_sum = sum(float(v) for v in per_line.values())
         if not close(per_line_sum, total_kwh, TOL_KWH):
             tes2_ok = False
-        if not close(float(summary["estimated_cost_rp"]), total_kwh * TARIFF_PER_KWH, TOL_COST_RP):
+        if not close(float(summary["estimated_cost_rp"]), total_kwh * ac.TARIF_PER_KWH, TOL_COST_RP):
             tes2_ok = False
 if tes2_ok:
     ok(f"get_summary OK - total_kwh {summary['total_kwh']}, per_line konsisten, estimasi biaya valid")
