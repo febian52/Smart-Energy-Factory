@@ -28,6 +28,7 @@ try:
         style_plotly_fig,
         format_id_num,
         format_id_currency,
+        create_status_donut,
     )
 except ImportError:
     from api_client import (
@@ -43,11 +44,12 @@ except ImportError:
         style_plotly_fig,
         format_id_num,
         format_id_currency,
+        create_status_donut,
     )
 
 try:
     st.set_page_config(
-        page_title="Overview - Smart Factory Energy Management",
+        page_title="Dashboard - Smart Energy Factory",
         page_icon="⚡",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -72,7 +74,7 @@ def load_overview_data(start_utc_iso: str, end_utc_iso: str):
     machines = get_machines()
     total_rated_kw = sum(float(m.get("rated_power_kw", 0)) for m in machines) if machines else 466.0
 
-    # ---- Poin 4: Parallelisasi fetch data per mesin ----
+    # Parallelisasi fetch data per mesin
     all_readings: list[dict] = []
     data_is_truncated = False
     failed_machines: list[str] = []
@@ -94,7 +96,7 @@ def load_overview_data(start_utc_iso: str, end_utc_iso: str):
             except Exception as exc:
                 failed_machines.append(m["machine_id"])
 
-    # ---- Parallelisasi fetch waste_alerts per mesin ----
+    # Parallelisasi fetch waste_alerts per mesin
     all_alerts: list[dict] = []
     has_mock_alert = False
 
@@ -116,31 +118,42 @@ def load_overview_data(start_utc_iso: str, end_utc_iso: str):
             except Exception:
                 pass
 
-    return machines, all_readings, all_alerts, has_mock_alert, total_rated_kw, data_is_truncated, failed_machines
+    return (
+        machines,
+        all_readings,
+        all_alerts,
+        has_mock_alert,
+        total_rated_kw,
+        data_is_truncated,
+        failed_machines,
+    )
 
 
 # ---------------------------------------------------------------------------
-# Pengambilan Data Backend
+# Inisialisasi Rentang Data 7 Hari Terakhir Berdasarkan Data Riil Backend
 # ---------------------------------------------------------------------------
 try:
-    with st.spinner("Mengambil data overview 7 hari terakhir dari server..."):
-        # Dapatkan batas asli database
-        s_raw, e_raw = get_data_range()
-        if e_raw.tzinfo is None:
-            e_wib = e_raw.replace(tzinfo=UTC_TZ).astimezone(WIB_TZ)
-        else:
-            e_wib = e_raw.astimezone(WIB_TZ)
+    s_dt_raw, e_dt_raw = get_data_range()
+    if e_dt_raw.tzinfo is None:
+        e_dt_wib = e_dt_raw.replace(tzinfo=UTC_TZ).astimezone(WIB_TZ)
+    else:
+        e_dt_wib = e_dt_raw.astimezone(WIB_TZ)
 
-        # Default rentang: 7 hari terakhir dari akhir data asli (WIB)
-        default_end_wib = e_wib.date()
-        default_start_wib = default_end_wib - timedelta(days=6)
+    default_end_wib = e_dt_wib
+    default_start_wib = default_end_wib - timedelta(days=6)
+except Exception:
+    default_start_wib = datetime(2026, 6, 24, 0, 0, tzinfo=WIB_TZ)
+    default_end_wib = datetime(2026, 6, 30, 23, 59, tzinfo=WIB_TZ)
 
-        # Konversi ke UTC untuk query API
-        wib_start_dt = datetime.combine(default_start_wib, time.min, tzinfo=WIB_TZ)
-        wib_end_dt   = datetime.combine(default_end_wib, time.max.replace(microsecond=0), tzinfo=WIB_TZ)
-        query_start_utc = wib_start_dt.astimezone(UTC_TZ).replace(tzinfo=None)
-        query_end_utc   = wib_end_dt.astimezone(UTC_TZ).replace(tzinfo=None)
+query_start_wib = datetime.combine(default_start_wib.date(), time.min, tzinfo=WIB_TZ)
+query_end_wib = datetime.combine(default_end_wib.date(), time.max.replace(microsecond=0), tzinfo=WIB_TZ)
 
+query_start_utc = query_start_wib.astimezone(UTC_TZ).replace(tzinfo=None)
+query_end_utc = query_end_wib.astimezone(UTC_TZ).replace(tzinfo=None)
+
+# Muat data secara paralel dan ter-cache
+try:
+    with st.spinner("Memuat data dashboard pabrik..."):
         (
             machines,
             all_readings,
@@ -198,9 +211,9 @@ if all_readings:
     # Derivasi rentang periode dari data yang tampil dalam format WIB
     min_wib = df_readings["timestamp_wib"].min().strftime("%d %b %Y").upper()
     max_wib = df_readings["timestamp_wib"].max().strftime("%d %b %Y").upper()
-    period_str = f"PERIODE: {min_wib} – {max_wib} (WIB)"
+    period_str = f"{min_wib} – {max_wib} (WIB)"
 
-    # Total Konsumsi Energi & Estimasi Biaya untuk rentang yang sedang tampil
+    # Total Konsumsi Energi & Estimasi Biaya
     total_kwh = float(df_readings["energy_kwh"].sum())
     cost_rp = total_kwh * TARIF_PER_KWH
 
@@ -230,7 +243,7 @@ if all_readings:
     max_power = float(hourly_total["power_kw"].max()) if not hourly_total.empty else 0.0
     avg_power = float(hourly_total["power_kw"].mean()) if not hourly_total.empty else 0.0
 
-    # Sanity check: Utilisasi daya = avg_power / total_rated_kw * 100
+    # Utilisasi daya = avg_power / total_rated_kw * 100
     utilisasi_pct = (avg_power / total_rated_kw * 100) if total_rated_kw > 0 else 0.0
 
     # Perhitungan Delta Konsumsi: Membandingkan dua hari WIB LENGKAP (24 jam penuh) terakhir
@@ -251,14 +264,14 @@ if all_readings:
         if prev_day_val > 0:
             delta_val = ((last_day_val - prev_day_val) / prev_day_val) * 100
             delta_prefix = "+" if delta_val >= 0 else ""
-            delta_badge_class = "badge-pill-green" if delta_val <= 0 else "badge-pill-orange"
+            delta_badge_class = "badge-pill-green" if delta_val <= 0 else "badge-pill-amber"
             last_date_str = last_complete_date.strftime("%d %b")
             prev_date_str = prev_complete_date.strftime("%d %b")
-            delta_html = f'<span class="{delta_badge_class}">{delta_prefix}{format_id_num(delta_val, 1)}%</span> <span style="color:#6B6259; font-weight:500; font-size:12px;">({last_date_str} vs {prev_date_str})</span>'
+            delta_html = f'<span class="{delta_badge_class}">{delta_prefix}{format_id_num(delta_val, 1)}%</span> <span style="color:#6B7280; font-weight:500; font-size:12px;">({last_date_str} vs {prev_date_str})</span>'
         else:
-            delta_html = '<span style="color:#6B6259; font-size:12px;">—</span>'
+            delta_html = '<span style="color:#6B7280; font-size:12px;">—</span>'
     else:
-        delta_html = '<span style="color:#6B6259; font-size:12px;">—</span>'
+        delta_html = '<span style="color:#6B7280; font-size:12px;">—</span>'
 
     # Proporsi Running vs Idle vs Off dari total energi terbaca
     run_kwh = float(df_readings[df_readings["status"] == "running"]["energy_kwh"].sum())
@@ -270,133 +283,79 @@ if all_readings:
     pct_off_val = (off_kwh / tot_status_kwh * 100) if tot_status_kwh > 0 else 0.0
 
 else:
-    period_str = f"PERIODE: {default_start_wib.strftime('%d %b %Y').upper()} – {default_end_wib.strftime('%d %b %Y').upper()} (WIB)"
+    period_str = f"{default_start_wib.strftime('%d %b %Y').upper()} – {default_end_wib.strftime('%d %b %Y').upper()} (WIB)"
     total_kwh, cost_rp = 0.0, 0
     hourly_total = pd.DataFrame()
     cur_power, min_power, max_power, avg_power = 0.0, 0.0, 0.0, 0.0
     utilisasi_pct = 0.0
     run_kwh, idle_kwh, off_kwh = 0.0, 0.0, 0.0
     pct_run_val, pct_idle_val, pct_off_val = 0.0, 0.0, 0.0
-    delta_html = '<span style="color:#6B6259; font-size:12px;">—</span>'
-
-# Subjudul halaman: lini + rentang periode yang tampil (WIB)
-subjudul_halaman = f"// {lines_str} · {period_str}"
+    delta_html = '<span style="color:#6B7280; font-size:12px;">—</span>'
 
 
 # ---------------------------------------------------------------------------
-# Header Halaman & Filter Granularitas
+# 1. Header Halaman Berbasis Data
 # ---------------------------------------------------------------------------
-header_col1, header_col2 = st.columns([2.2, 1.2])
-
-with header_col1:
-    st.markdown(
-        f"""
-        <div style="margin-bottom: 12px;">
-            <h1 style="color: #1F1A17; font-size: 2.2rem; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.03em;">
-                Energy Dashboard Overview
-            </h1>
-            <div style="font-size: 12px; font-weight: 700; color: #6B6259; text-transform: uppercase; letter-spacing: 0.08em;">
-                {subjudul_halaman}
-            </div>
+st.markdown(
+    f"""
+    <div style="margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #E5E8EF;">
+        <h1 style="color: #111827; font-size: 1.55rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">
+            Energy Dashboard Overview
+        </h1>
+        <div style="font-size: 13px; font-weight: 500; color: #6B7280;">
+            {lines_str} &middot; Periode Data: <b style="color:#111827;">{period_str}</b>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with header_col2:
-    st.markdown("<div style='margin-top: 18px;'></div>", unsafe_allow_html=True)
-    view_granularity = st.segmented_control(
-        "Tampilan",
-        options=["Hourly", "Daily"],
-        default="Hourly",
-        selection_mode="single",
-        label_visibility="collapsed",
-    ) or "Hourly"
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ---------------------------------------------------------------------------
-# Kartu KPI Atas (Semua KPI memakai rentang periode yang sama)
+# 2. Baris Utama (Row 1): Revenue Style (Kiri) & Expenses Style (Kanan)
 # ---------------------------------------------------------------------------
-kpi_c1, kpi_c2, kpi_c3 = st.columns(3)
+row1_left, row1_right = st.columns([1.8, 1.2])
 
-with kpi_c1:
-    st.markdown(
-        f"""
-        <div class="kpi-card-velora" style="height:100%;">
-            <div class="kpi-label">Total Konsumsi Energi</div>
-            <div>
-                <span class="kpi-val">{format_id_num(total_kwh, 1)}</span>
-                <span class="kpi-unit">kWh</span>
-            </div>
-            <div class="kpi-sub">
-                {delta_html}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with kpi_c2:
-    st.markdown(
-        f"""
-        <div class="kpi-card-velora" style="height:100%;">
-            <div class="kpi-label">Daya total jam terakhir data</div>
-            <div>
-                <span class="kpi-val">{format_id_num(cur_power, 1)}</span>
-                <span class="kpi-unit">kW</span>
-            </div>
-            <div class="kpi-sub">
-                <span style="color:#6B6259; font-weight:600; font-size:12px;">Rata-rata periode: <b>{format_id_num(avg_power, 1)} kW</b></span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with kpi_c3:
-    st.markdown(
-        f"""
-        <div class="kpi-card-velora" style="height:100%;">
-            <div class="kpi-label">Estimasi Biaya Listrik (Grid)</div>
-            <div>
-                <span class="kpi-val">{format_id_currency(cost_rp)}</span>
-            </div>
-            <div class="kpi-sub">
-                <span class="badge-pill-orange">⚡ Tarif {format_id_currency(TARIF_PER_KWH)}</span>
-                <span style="color:#6B6259; font-weight:500; font-size:12px;">per kWh</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
-
-
-# ---------------------------------------------------------------------------
-# Baris Tengah: Energy Overview Line Chart & Power Radial Gauge (st.container)
-# ---------------------------------------------------------------------------
-col_mid_left, col_mid_right = st.columns([1.8, 1.05])
-
-with col_mid_left:
+# --- Kartu Kiri: Revenue Style (Energy Consumption) ---
+with row1_left:
     with st.container(border=True):
-        st.markdown(
-            """
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div>
-                    <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Energy Overview</h3>
-                    <div style="font-size:12px; color:#6B6259; font-weight:600;">Daya total seluruh lini mesin (kW)</div>
-                </div>
-                <div style="display:flex; gap:16px; font-size:12px; font-weight:700;">
-                    <span style="display:flex; align-items:center; gap:5px; color:#E8590C;">
-                        <span style="width:12px; height:3px; background:#E8590C; border-radius:2px;"></span> Daya Total (kW)
-                    </span>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        rev_head_col, rev_ctrl_col = st.columns([2.2, 1.2])
 
+        with rev_head_col:
+            st.markdown(
+                f"""
+                <div>
+                    <div style="font-size: 0.95rem; font-weight: 700; color: #111827; margin-bottom: 2px;">
+                        Energy Consumption
+                    </div>
+                    <div style="font-size: 11px; font-weight: 600; color: #6B7280; letter-spacing: 0.05em; text-transform: uppercase;">
+                        Total Konsumsi Energi
+                    </div>
+                    <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 4px;">
+                        <span style="font-size: 2.1rem; font-weight: 800; color: #111827; letter-spacing: -0.03em;">
+                            {format_id_num(total_kwh, 1)}
+                        </span>
+                        <span style="font-size: 1.1rem; font-weight: 600; color: #6B7280;">kWh</span>
+                        <div style="margin-left: 6px;">
+                            {delta_html}
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with rev_ctrl_col:
+            st.markdown(f'<div style="text-align:right; font-size:11px; color:#6B7280; font-weight:500; margin-bottom:6px;">{period_str}</div>', unsafe_allow_html=True)
+            view_granularity = st.segmented_control(
+                "Granularitas",
+                options=["Hourly", "Daily"],
+                default="Hourly",
+                selection_mode="single",
+                label_visibility="collapsed",
+            ) or "Hourly"
+
+        # Chart: Spline Line Chart biru dengan Area Fill Gradien Halus
         if hourly_total.empty:
             st.info("Tidak ada data pembacaan sensor.")
         else:
@@ -405,7 +364,6 @@ with col_mid_left:
                 x_vals = df_chart["hour_wib"]
                 y_vals = df_chart["power_kw"]
             else:
-                # Agregasi Harian: Rata-rata daya per jam di hari tersebut
                 df_chart = (
                     hourly_total.assign(date_wib=hourly_total["hour_wib"].dt.date)
                     .groupby("date_wib", as_index=False)["power_kw"]
@@ -415,142 +373,99 @@ with col_mid_left:
                 x_vals = df_chart["date_wib"]
                 y_vals = df_chart["power_kw"]
 
-            fig_multi = go.Figure()
+            fig_rev = go.Figure()
 
-            # Satu garis daya total pabrik (kW)
-            fig_multi.add_trace(
+            # Garis spline biru dengan area fill gradien halus
+            fig_rev.add_trace(
                 go.Scatter(
                     x=x_vals,
                     y=y_vals,
                     mode="lines",
                     name="Daya Total (kW)",
-                    line=dict(color="#E8590C", width=2.5, shape="spline"),
+                    line=dict(color="#1D6FF2", width=2.5, shape="spline"),
                     fill="tozeroy",
-                    fillcolor="rgba(232, 89, 12, 0.05)",
+                    fillcolor="rgba(29, 111, 242, 0.10)",
                     hovertemplate="<b>%{x|%d %b %Y, %H:00 WIB}</b><br>Daya Total: <b>%{y:.2f} kW</b><extra></extra>",
                 )
             )
 
-            style_plotly_fig(fig_multi, height=330)
-            fig_multi.update_layout(
-                margin=dict(l=20, r=20, t=10, b=30),
+            style_plotly_fig(fig_rev, height=270)
+            fig_rev.update_layout(
+                margin=dict(l=15, r=15, t=10, b=20),
                 hovermode="x unified",
             )
-            st.plotly_chart(fig_multi, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(fig_rev, use_container_width=True, config={"displayModeBar": False})
 
-with col_mid_right:
-    # Caption timestamp jam terakhir data untuk gauge
-    if not hourly_total.empty:
-        last_hour_str = hourly_total["hour_wib"].iloc[-1].strftime("%d %b %Y, %H:00 WIB")
-    else:
-        last_hour_str = "—"
 
+# --- Kartu Kanan: Expenses Style (Status Operasional) ---
+with row1_right:
     with st.container(border=True):
         st.markdown(
+            """
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <div style="font-size:0.95rem; font-weight:700; color:#111827;">Status Operasional</div>
+                <div style="font-size:11px; color:#6B7280; font-weight:500;">7 Hari Terakhir</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Donut Chart dengan Anotasi Total Energi di Tengah & Legend di Kanan
+        total_kwh_rounded_str = f"{format_id_num(total_kwh, 0)} kWh"
+        donut_fig = create_status_donut(
+            run_pct=pct_run_val,
+            idle_pct=pct_idle_val,
+            off_pct=pct_off_val,
+            run_kwh=run_kwh,
+            idle_kwh=idle_kwh,
+            off_kwh=off_kwh,
+            total_label="Total Energi",
+            total_val_str=total_kwh_rounded_str,
+            height=270,
+        )
+        st.plotly_chart(donut_fig, use_container_width=True, config={"displayModeBar": False})
+
+        # Section: MAJOR STATUS (3 Box Kartu Kecil Berdampingan seperti Major Expenses di Gambar 1)
+        st.markdown(
+            """
+            <div style="font-size:11px; font-weight:700; color:#6B7280; letter-spacing:0.04em; text-transform:uppercase; margin:4px 0 8px 0;">
+                Rincian Status Mesin
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
             f"""
-            <div style="margin-bottom:4px;">
-                <div style="font-weight:800; font-size:1.15rem; color:#1F1A17; margin-bottom:4px;">Power Meter</div>
-                <div style="font-size:12px; color:#6B6259; font-weight:600; margin-bottom:2px;">
-                    Total Daya Seluruh Mesin (Kapasitas: {format_id_num(total_rated_kw, 1)} kW)
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+                <div style="background:#F9FAFB; border:1px solid #E5E8EF; border-radius:10px; padding:8px 10px;">
+                    <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:#16A34A; margin-bottom:2px;">
+                        <span style="width:6px; height:6px; background:#16A34A; border-radius:50%;"></span> Running
+                    </div>
+                    <div style="font-size:13px; font-weight:700; color:#111827;">{format_id_num(run_kwh, 0)} <span style="font-size:10px; color:#6B7280; font-weight:500;">kWh</span></div>
+                    <div style="font-size:10px; color:#6B7280; font-weight:500;">{format_id_num(pct_run_val, 1)}%</div>
                 </div>
-                <div style="font-size:11px; color:#8C827A;">
-                    Jam terakhir data: {last_hour_str}
+                <div style="background:#F9FAFB; border:1px solid #E5E8EF; border-radius:10px; padding:8px 10px;">
+                    <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:#F59E0B; margin-bottom:2px;">
+                        <span style="width:6px; height:6px; background:#F59E0B; border-radius:50%;"></span> Idle
+                    </div>
+                    <div style="font-size:13px; font-weight:700; color:#111827;">{format_id_num(idle_kwh, 0)} <span style="font-size:10px; color:#6B7280; font-weight:500;">kWh</span></div>
+                    <div style="font-size:10px; color:#6B7280; font-weight:500;">{format_id_num(pct_idle_val, 1)}%</div>
+                </div>
+                <div style="background:#F9FAFB; border:1px solid #E5E8EF; border-radius:10px; padding:8px 10px;">
+                    <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:#9CA3AF; margin-bottom:2px;">
+                        <span style="width:6px; height:6px; background:#9CA3AF; border-radius:50%;"></span> Off
+                    </div>
+                    <div style="font-size:13px; font-weight:700; color:#111827;">{format_id_num(off_kwh, 0)} <span style="font-size:10px; color:#6B7280; font-weight:500;">kWh</span></div>
+                    <div style="font-size:10px; color:#6B7280; font-weight:500;">{format_id_num(pct_off_val, 1)}%</div>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # Dial Radial Gauge: Skala 0 sampai total rated_power_kw semua mesin (466 kW)
-        gauge_fig = go.Figure(
-            go.Indicator(
-                mode="gauge+number",
-                value=round(cur_power, 2),
-                domain={"x": [0.05, 0.95], "y": [0.15, 0.95]},
-                title={
-                    "text": "<span style='font-size:12px;color:#6B6259;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'>Daya total jam terakhir data</span>",
-                    "font": {"size": 13, "family": "Plus Jakarta Sans"},
-                },
-                number={
-                    "suffix": " <span style='font-size:13px;color:#6B6259;font-weight:500;'>kW</span>",
-                    "font": {"size": 34, "color": "#1F1A17", "family": "Plus Jakarta Sans"},
-                },
-                gauge={
-                    "axis": {
-                        "range": [0, total_rated_kw],
-                        "tickwidth": 1.5,
-                        "tickcolor": "#C4B5A5",
-                        "ticklen": 6,
-                        "nticks": 8,
-                        "tickfont": {"size": 12, "color": "#6B6259"},
-                    },
-                    "bar": {"color": "#E8590C", "thickness": 0.14},
-                    "bgcolor": "#FFF7EB",
-                    "borderwidth": 0,
-                    "steps": [
-                        {"range": [0, total_rated_kw], "color": "#FAF4E8"},
-                    ],
-                },
-            )
-        )
-        gauge_fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=195,
-            margin=dict(l=15, r=15, t=20, b=10),
-        )
-        st.plotly_chart(gauge_fig, use_container_width=True, config={"displayModeBar": False})
-
-        # Min / Max / Avg bar dihitung dari deret TOTAL daya semua mesin per jam
         st.markdown(
-            f"""
-            <div style="display:flex; justify-content:space-around; text-align:center; padding:8px 0; border-top:1px solid #EFE5D6; margin-top:-8px; margin-bottom:12px;">
-                <div>
-                    <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Min</div>
-                    <div style="font-size:14px; font-weight:700; color:#1F1A17;">{format_id_num(min_power, 1)} <span style="font-size:12px;">kW</span></div>
-                </div>
-                <div style="border-right:1px solid #EFE5D6;"></div>
-                <div>
-                    <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Max</div>
-                    <div style="font-size:14px; font-weight:700; color:#E8590C;">{format_id_num(max_power, 1)} <span style="font-size:12px;">kW</span></div>
-                </div>
-                <div style="border-right:1px solid #EFE5D6;"></div>
-                <div>
-                    <div style="font-size:12px; color:#6B6259; text-transform:uppercase; font-weight:600;">Rata-rata</div>
-                    <div style="font-size:14px; font-weight:700; color:#1F1A17;">{format_id_num(avg_power, 1)} <span style="font-size:12px;">kW</span></div>
-                </div>
-            </div>
-
-            <div style="display:flex; flex-direction:column; gap:8px;">
-                <div>
-                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
-                        <span style="color:#6B6259;">Konsumsi Beban Running</span>
-                        <span style="color:#16A34A; font-weight:700;">{format_id_num(pct_run_val, 1)}% ({format_id_num(run_kwh, 1)} kWh)</span>
-                    </div>
-                    <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
-                        <div style="background:#16A34A; width:{pct_run_val:.1f}%; height:100%; border-radius:4px;"></div>
-                    </div>
-                </div>
-                <div>
-                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
-                        <span style="color:#6B6259;">Konsumsi Beban Standby (Idle)</span>
-                        <span style="color:#F2C230; font-weight:700;">{format_id_num(pct_idle_val, 1)}% ({format_id_num(idle_kwh, 1)} kWh)</span>
-                    </div>
-                    <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
-                        <div style="background:#F2C230; width:{pct_idle_val:.1f}%; height:100%; border-radius:4px;"></div>
-                    </div>
-                </div>
-                <div>
-                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:3px;">
-                        <span style="color:#6B6259;">Kondisi Mesin Mati (Off)</span>
-                        <span style="color:#8C827A; font-weight:700;">{format_id_num(pct_off_val, 1)}% ({format_id_num(off_kwh, 1)} kWh)</span>
-                    </div>
-                    <div style="background:#F2ECE2; height:6px; border-radius:4px; overflow:hidden;">
-                        <div style="background:#C4B5A5; width:{pct_off_val:.1f}%; height:100%; border-radius:4px;"></div>
-                    </div>
-                </div>
-            </div>
-            """,
+            "<div style='padding-bottom:18px;'></div>",
             unsafe_allow_html=True,
         )
 
@@ -558,152 +473,238 @@ st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Baris Bawah: 3 Kolom (Alerts per Tipe, Ringkasan Operasional, Peta Beban Mesin)
+# 3. Baris Kedua (Row 2): Financial Overview Bar, Patient Data, & Inventory Alert
 # ---------------------------------------------------------------------------
-b_c1, b_c2, b_c3 = st.columns([1.05, 1.15, 1.6])
+row2_c1, row2_c2, row2_c3 = st.columns([1.25, 1.05, 1.1])
 
-with b_c1:
-    mock_badge_html = '<span class="badge-mock">Data contoh</span>' if has_mock_alert else ""
-
-    rows_parts = []
-    if alert_type_counts:
-        for atype, count in sorted(alert_type_counts.items(), key=lambda x: -x[1]):
-            readable_type = atype.replace("_", " ").title()
-            rows_parts.append(
-                f'<div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">'
-                f'<span style="color:#6B6259;">{readable_type}</span>'
-                f'<span style="font-weight:700; color:#1F1A17;">{count} Kasus</span>'
-                f'</div>'
-            )
-    else:
-        rows_parts.append(
-            '<div style="font-size:13px; color:#6B6259; padding: 12px 0;">'
-            'Tidak ada pemborosan terdeteksi pada rentang waktu ini.'
-            '</div>'
-        )
-
-    alert_rows_html = "".join(rows_parts)
-    with st.container(border=True):
-        st.markdown(
-            "".join([
-                '<div style="min-height:305px; display:flex; flex-direction:column; justify-content:flex-start;">',
-                '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">',
-                f'<div style="font-weight:700; font-size:14px; color:#1F1A17;">Peringatan Pemborosan {mock_badge_html}</div>',
-                f'<span class="badge-pill-orange">{total_waste_alerts} Kasus</span>',
-                '</div>',
-                '<div style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">',
-                alert_rows_html,
-                '</div>',
-                '</div>',
-            ]),
-            unsafe_allow_html=True,
-        )
-
-with b_c2:
-    with st.container(border=True):
-        st.markdown(
-            f"""
-            <div style="min-height:305px; display:flex; flex-direction:column; justify-content:flex-start;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <div style="font-weight:700; font-size:14px; color:#1F1A17;">Ringkasan Operasional</div>
-                    <span class="badge-pill-green">Aktif</span>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
-                    <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
-                        <span style="color:#6B6259;">Tingkat Utilisasi Daya</span>
-                        <span style="font-weight:700; color:#1F1A17;">{format_id_num(utilisasi_pct, 1)}%</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
-                        <span style="color:#6B6259;">Jumlah Mesin Terdaftar</span>
-                        <span style="font-weight:700; color:#1F1A17;">{len(machines)} Mesin</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:6px; border-bottom:1px solid #FAF4E8;">
-                        <span style="color:#6B6259;">Total Kapasitas Terpasang</span>
-                        <span style="font-weight:700; color:#1F1A17;">{format_id_num(total_rated_kw, 1)} kW</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:13px;">
-                        <span style="color:#6B6259;">Total Konsumsi 7 Hari</span>
-                        <span style="font-weight:700; color:#1F1A17;">{format_id_num(total_kwh, 1)} kWh</span>
-                    </div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-with b_c3:
+# --- Kolom 1: Financial Overview Style (Beban Daya per Mesin / Lini) ---
+with row2_c1:
     with st.container(border=True):
         st.markdown(
             """
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <div style="font-weight:700; font-size:14px; color:#1F1A17;">Peta Beban Mesin (Heatmap)</div>
-                <span style="font-size:12px; color:#6B6259; font-weight:600;">Jam 00–23 (WIB)</span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <div style="font-size:0.95rem; font-weight:700; color:#111827;">Konsumsi Daya per Mesin</div>
+                <div style="font-size:11px; color:#6B7280;">Total 12 Mesin</div>
             </div>
+            <div style="font-size:11px; color:#6B7280; margin-bottom:8px;">Akumulasi konsumsi energi listrik per ID mesin</div>
             """,
             unsafe_allow_html=True,
         )
 
-        if not all_readings or not machines:
-            st.info("Data pembacaan sensor belum tersedia.")
-        else:
-            df_readings["hour_num"] = df_readings["timestamp_wib"].dt.hour
-            sorted_machines = sorted(machines, key=lambda m: m.get("machine_id", ""))
-            machine_ids = [m["machine_id"] for m in sorted_machines]
-            hours_labels = [f"{h:02d}" for h in range(24)]
+        if all_readings:
+            mach_kwh = (
+                df_readings.groupby("machine_id", as_index=False)["energy_kwh"]
+                .sum()
+                .sort_values("energy_kwh", ascending=True)
+            )
 
-            # Matriks Beban: z[m_idx][h] = rata-rata power_kw / rated_power_kw
-            matrix_z: list[list[float]] = []
-            for m in sorted_machines:
-                mid = m["machine_id"]
-                rated_kw = float(m.get("rated_power_kw", 0)) or 1.0
-                df_m = df_readings[df_readings["machine_id"] == mid]
-
-                row_z: list[float] = []
-                for h in range(24):
-                    df_mh = df_m[df_m["hour_num"] == h]
-                    if not df_mh.empty:
-                        avg_h_p = float(df_mh["power_kw"].mean())
-                        ratio = avg_h_p / rated_kw
-                    else:
-                        ratio = 0.0
-                    row_z.append(round(ratio, 4))
-                matrix_z.append(row_z)
-
-            fig_heatmap = go.Figure(
-                data=go.Heatmap(
-                    z=matrix_z,
-                    x=hours_labels,
-                    y=machine_ids,
-                    xgap=3,
-                    ygap=3,
-                    colorscale=[
-                        [0.0, "#FFF9DB"],
-                        [0.5, "#FCD34D"],
-                        [1.0, "#E8590C"],
-                    ],
-                    colorbar=dict(
-                        title=dict(text="Beban", font=dict(size=11, color="#6B6259")),
-                        tickformat=".0%",
-                        tickfont=dict(size=11, color="#6B6259"),
-                        len=0.9,
-                        thickness=10,
+            fig_bar_mach = go.Figure(
+                go.Bar(
+                    x=mach_kwh["energy_kwh"],
+                    y=mach_kwh["machine_id"],
+                    orientation="h",
+                    marker=dict(
+                        color="#1D6FF2",
+                        cornerradius=5,
                     ),
-                    hovertemplate="<b>Mesin %{y}</b><br>Jam: %{x}:00 WIB<br>Rasio Beban: <b>%{z:.1%}</b><extra></extra>",
+                    text=mach_kwh["energy_kwh"].apply(lambda v: f"{format_id_num(v, 0)}"),
+                    textposition="outside",
+                    cliponaxis=False,
+                    textfont=dict(size=10, color="#111827", family="Inter, sans-serif"),
+                    hovertemplate="<b>Mesin %{y}</b><br>Konsumsi: %{x:,.1f} kWh<extra></extra>",
                 )
             )
-            fig_heatmap.update_xaxes(
-                title_text="Jam WIB",
-                tickfont=dict(size=11, color="#6B6259"),
-                title_font=dict(size=11, color="#6B6259"),
+            style_plotly_fig(fig_bar_mach, height=220)
+            fig_bar_mach.update_layout(
+                margin=dict(l=10, r=55, t=5, b=10),
+                xaxis=dict(title="", showgrid=True, zeroline=False),
+                yaxis=dict(title="", tickfont=dict(size=10, color="#111827"), dtick=1),
             )
-            fig_heatmap.update_yaxes(
-                autorange="reversed",
-                tickmode="linear",
-                dtick=1,
-                tickfont=dict(size=10, color="#6B6259"),
+            st.plotly_chart(fig_bar_mach, use_container_width=True, config={"displayModeBar": False})
+        else:
+            st.info("Data konsumsi per mesin belum tersedia.")
+
+
+# --- Kolom 2: Patient Data Style (Utilisasi Daya & Kapasitas) ---
+with row2_c2:
+    with st.container(border=True):
+        util_html = "".join([
+            '<div style="min-height: 280px; display: flex; flex-direction: column; justify-content: space-between;">',
+            '<div>',
+            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">',
+            '<div style="font-size:0.95rem; font-weight:700; color:#111827;">Utilisasi Daya</div>',
+            '<span class="badge-pill-blue">Daya Terpasang</span>',
+            '</div>',
+            '<div style="font-size:12px; color:#6B7280; margin-bottom:18px;">Beban saat ini terhadap kapasitas total pabrik</div>',
+            '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;">',
+            '<div>',
+            '<span style="font-size:11px; color:#6B7280; font-weight:600; text-transform:uppercase;">Jam Terakhir</span>',
+            f'<div style="font-size:1.55rem; font-weight:800; color:#111827;">{format_id_num(cur_power, 1)} <span style="font-size:12px; font-weight:500; color:#6B7280;">kW</span></div>',
+            '</div>',
+            '<div style="text-align:right;">',
+            '<span style="font-size:11px; color:#6B7280; font-weight:600; text-transform:uppercase;">Kapasitas</span>',
+            f'<div style="font-size:1.2rem; font-weight:700; color:#6B7280;">{format_id_num(total_rated_kw, 0)} <span style="font-size:12px; font-weight:500;">kW</span></div>',
+            '</div>',
+            '</div>',
+            '<div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:#1D6FF2; margin-bottom:6px;">',
+            '<span>Rasio Beban</span>',
+            f'<span>{format_id_num(utilisasi_pct, 1)}%</span>',
+            '</div>',
+            '<div style="background:#F3F4F6; height:8px; border-radius:4px; overflow:hidden; margin-bottom:16px;">',
+            f'<div style="background:#1D6FF2; width:{min(100.0, utilisasi_pct):.1f}%; height:100%; border-radius:4px;"></div>',
+            '</div>',
+            '</div>',
+            '<div style="display:flex; justify-content:space-between; padding-top:12px; border-top:1px solid #E5E8EF; font-size:12px;">',
+            f'<div><span style="color:#6B7280;">Min Beban:</span><b style="color:#111827; margin-left:3px;">{format_id_num(min_power, 1)} kW</b></div>',
+            f'<div><span style="color:#6B7280;">Puncak:</span><b style="color:#1D6FF2; margin-left:3px;">{format_id_num(max_power, 1)} kW</b></div>',
+            f'<div><span style="color:#6B7280;">Rata-rata:</span><b style="color:#111827; margin-left:3px;">{format_id_num(avg_power, 1)} kW</b></div>',
+            '</div>',
+            '</div>',
+        ])
+        st.markdown(util_html, unsafe_allow_html=True)
+
+
+# --- Kolom 3: Inventory Status Style (Peringatan Pemborosan Energi) ---
+with row2_c3:
+    with st.container(border=True):
+        mock_badge_html = '<span class="badge-mock">Contoh</span>' if has_mock_alert else ""
+        # Hitung sebaran severity secara dinamis dari data API
+        sev_badges = []
+        if all_alerts:
+            df_a = pd.DataFrame(all_alerts)
+            df_a["severity"] = df_a["severity"].astype(str).str.lower()
+            sev_counts = df_a["severity"].value_counts().to_dict()
+            sev_order = ["high", "medium", "low"] + [
+                s for s in sorted(sev_counts.keys()) if s not in ("high", "medium", "low")
+            ]
+            sev_cls_map = {
+                "high": "badge-pill-red",
+                "medium": "badge-pill-amber",
+                "low": "badge-pill-green",
+            }
+            for s in sev_order:
+                if s in sev_counts:
+                    cls = sev_cls_map.get(s, "badge-pill-grey")
+                    sev_badges.append(
+                        f'<span class="{cls}" style="flex:1; text-align:center;">{s.title()}: {format_id_num(sev_counts[s], 0)}</span>'
+                    )
+        if not sev_badges:
+            sev_badges.append('<span class="badge-pill-grey" style="flex:1; text-align:center;">Tidak ada alert</span>')
+
+        # List anomali teratas
+        rows_parts = []
+        if alert_type_counts:
+            for atype, count in sorted(alert_type_counts.items(), key=lambda x: -x[1])[:3]:
+                readable_type = atype.replace("_", " ").title()
+                rows_parts.append(
+                    f'<div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:7px 0; border-bottom:1px solid #F3F4F6;">'
+                    f'<span style="color:#6B7280; font-weight:500;">{readable_type}</span>'
+                    f'<span style="font-weight:700; color:#111827;">{format_id_num(count, 0)}</span>'
+                    f'</div>'
+                )
+        else:
+            rows_parts.append('<div style="font-size:12px; color:#6B7280; padding:10px 0;">Tidak ada anomali terdeteksi.</div>')
+
+        alert_card_html = "".join([
+            '<div style="min-height: 280px; display: flex; flex-direction: column; justify-content: space-between;">',
+            '<div>',
+            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">',
+            f'<div style="font-size:0.95rem; font-weight:700; color:#111827;">Peringatan Pemborosan {mock_badge_html}</div>',
+            f'<span class="badge-pill-amber">{format_id_num(total_waste_alerts, 0)} Kasus</span>',
+            '</div>',
+            '<div style="font-size:12px; color:#6B7280; margin-bottom:14px;">Ringkasan anomali konsumsi daya terdeteksi</div>',
+            '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">',
+            "".join(sev_badges),
+            '</div>',
+            "".join(rows_parts),
+            '</div>',
+            '<div style="font-size:12px; color:#6B7280; padding-top:10px; border-top:1px solid #E5E8EF;">',
+            'Lihat detail rekomendasi pada halaman <b style="color:#1D6FF2;">Waste Alerts</b>',
+            '</div>',
+            '</div>',
+        ])
+        st.markdown(alert_card_html, unsafe_allow_html=True)
+
+st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# 4. Baris Ketiga (Row 3): Heatmap Beban Listrik Pabrik 24 Jam
+# ---------------------------------------------------------------------------
+with st.container(border=True):
+    st.markdown(
+        """
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <div style="font-size:0.95rem; font-weight:700; color:#111827;">Peta Intensitas Beban Mesin (Heatmap 24 Jam)</div>
+            <span style="font-size:11px; color:#6B7280; font-weight:500;">Jam 00–23 (WIB)</span>
+        </div>
+        <div style="font-size:11px; color:#6B7280; margin-bottom:10px;">Distribusi rasio beban kerja per mesin sepanjang 24 jam operasional pabrik</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not all_readings or not machines:
+        st.info("Data pembacaan sensor belum tersedia.")
+    else:
+        df_readings["hour_num"] = df_readings["timestamp_wib"].dt.hour
+        sorted_machines = sorted(machines, key=lambda m: m.get("machine_id", ""))
+        machine_ids = [m["machine_id"] for m in sorted_machines]
+        hours_labels = [f"{h:02d}" for h in range(24)]
+
+        # Matriks Beban: z[m_idx][h] = rata-rata power_kw / rated_power_kw
+        matrix_z: list[list[float]] = []
+        for m in sorted_machines:
+            mid = m["machine_id"]
+            rated_kw = float(m.get("rated_power_kw", 0)) or 1.0
+            df_m = df_readings[df_readings["machine_id"] == mid]
+
+            row_z: list[float] = []
+            for h in range(24):
+                df_mh = df_m[df_m["hour_num"] == h]
+                if not df_mh.empty:
+                    avg_h_p = float(df_mh["power_kw"].mean())
+                    ratio = avg_h_p / rated_kw
+                else:
+                    ratio = 0.0
+                row_z.append(round(ratio, 4))
+            matrix_z.append(row_z)
+
+        # Skala Biru: #EAF2FF (beban sangat rendah) ke #1D6FF2 (beban tinggi)
+        fig_heatmap = go.Figure(
+            data=go.Heatmap(
+                z=matrix_z,
+                x=hours_labels,
+                y=machine_ids,
+                xgap=2,
+                ygap=2,
+                colorscale=[
+                    [0.0, "#EAF2FF"],
+                    [0.5, "#93C5FD"],
+                    [1.0, "#1D6FF2"],
+                ],
+                colorbar=dict(
+                    title=dict(text="Rasio", font=dict(size=11, color="#6B7280")),
+                    tickformat=".0%",
+                    tickfont=dict(size=10, color="#6B7280"),
+                    len=0.9,
+                    thickness=10,
+                ),
+                hovertemplate="<b>Mesin %{y}</b><br>Jam: %{x}:00 WIB<br>Rasio Beban: <b>%{z:.1%}</b><extra></extra>",
             )
-            style_plotly_fig(fig_heatmap, height=265)
-            fig_heatmap.update_layout(
-                margin=dict(l=10, r=10, t=10, b=25),
-            )
-            st.plotly_chart(fig_heatmap, use_container_width=True, config={"displayModeBar": False})
+        )
+        fig_heatmap.update_xaxes(
+            title_text="Jam Operasional WIB",
+            tickfont=dict(size=10, color="#6B7280"),
+            title_font=dict(size=11, color="#6B7280"),
+        )
+        fig_heatmap.update_yaxes(
+            autorange="reversed",
+            tickmode="linear",
+            dtick=1,
+            tickfont=dict(size=10, color="#6B7280"),
+        )
+        style_plotly_fig(fig_heatmap, height=265)
+        fig_heatmap.update_layout(
+            margin=dict(l=10, r=10, t=10, b=25),
+        )
+        st.plotly_chart(fig_heatmap, use_container_width=True, config={"displayModeBar": False})

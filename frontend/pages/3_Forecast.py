@@ -50,7 +50,7 @@ if hasattr(ac, "TIMEOUT"):
 
 try:
     st.set_page_config(
-        page_title="Forecast - Smart Factory Energy Management",
+        page_title="Forecast - Smart Energy Factory",
         page_icon="⚡",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -82,8 +82,20 @@ except Exception as exc:
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Kontrol Pilihan Mesin & Horizon Prediksi
+# Header Halaman & Kontrol Pilihan Mesin + Horizon Prediksi
 # ---------------------------------------------------------------------------
+header_title_html = "".join([
+    '<div style="margin: 0 0 14px 0; padding-bottom: 12px; border-bottom: 1px solid #E5E8EF;">',
+    '<h1 style="color: #111827; font-size: 1.55rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em;">',
+    'Forecast Konsumsi Energi',
+    '</h1>',
+    '<div style="font-size: 13px; font-weight: 500; color: #6B7280;">',
+    'Prediksi beban energi per mesin menggunakan model ML (WIB)',
+    '</div>',
+    '</div>',
+])
+st.markdown(header_title_html, unsafe_allow_html=True)
+
 ctrl_c1, ctrl_c2 = st.columns([2.2, 1.4])
 
 with ctrl_c1:
@@ -109,19 +121,6 @@ with ctrl_c2:
         label_visibility="collapsed",
     ) or "24 Jam"
     selected_hours = 24 if horizon_label == "24 Jam" else 168
-
-# Header Halaman Bersih & Dinamis
-header_title_html = "".join([
-    '<div style="margin: 12px 0 16px 0;">',
-    '<h1 style="color: #1F1A17; font-size: 2.2rem; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.03em;">',
-    'Forecast Konsumsi Energi',
-    '</h1>',
-    '<div style="font-size: 12px; font-weight: 700; color: #6B6259; text-transform: uppercase; letter-spacing: 0.08em;">',
-    f'// {selected_machine_id} - {selected_machine.get("name", "MESIN").upper()} · {selected_machine.get("line", "LINE").upper()} · HORIZON: {selected_hours} JAM (WIB)',
-    '</div>',
-    '</div>',
-])
-st.markdown(header_title_html, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # 2. Pengambilan Data Prediksi Model ML
@@ -224,14 +223,14 @@ kpi_c1, kpi_c2, kpi_c3 = st.columns(3)
 
 with kpi_c1:
     card1_html = "".join([
-        '<div class="kpi-card-velora">',
+        '<div class="kpi-card" style="height:100%;">',
         f'<div class="kpi-label">Total Prediksi Energi {mock_badge}</div>',
         '<div>',
         f'<span class="kpi-val">{format_id_num(total_pred_kwh, 1)}</span>',
         '<span class="kpi-unit">kWh</span>',
         '</div>',
-        '<div class="kpi-sub" style="margin-top:4px;">',
-        f'<span style="color:#6B6259; font-weight:600; font-size:12px;">Horizon: <b>{selected_hours} Jam</b> ({len(df_preds)} titik jam)</span>',
+        '<div class="kpi-sub" style="margin-top:6px;">',
+        f'<span style="color:#6B7280; font-weight:500; font-size:12px;">Horizon: <b style="color:#111827;">{selected_hours} Jam</b> ({len(df_preds)} titik jam)</span>',
         '</div>',
         '</div>',
     ])
@@ -239,13 +238,13 @@ with kpi_c1:
 
 with kpi_c2:
     card2_html = "".join([
-        '<div class="kpi-card-velora">',
+        '<div class="kpi-card" style="height:100%;">',
         '<div class="kpi-label">Jam Puncak Prediksi (WIB)</div>',
         '<div>',
-        f'<span class="kpi-val" style="font-size:1.45rem;">{peak_time_str}</span>',
+        f'<span class="kpi-val" style="font-size:1.35rem;">{peak_time_str}</span>',
         '</div>',
-        '<div class="kpi-sub" style="margin-top:4px;">',
-        f'<span class="badge-pill-orange">Beban Puncak: {format_id_num(peak_val, 2)} kWh</span>',
+        '<div class="kpi-sub" style="margin-top:6px;">',
+        f'<span class="badge-pill-amber">Beban Puncak: {format_id_num(peak_val, 2)} kWh</span>',
         '</div>',
         '</div>',
     ])
@@ -253,20 +252,20 @@ with kpi_c2:
 
 with kpi_c3:
     card3_html = "".join([
-        '<div class="kpi-card-velora">',
+        '<div class="kpi-card" style="height:100%;">',
         '<div class="kpi-label">Estimasi Biaya Prediksi</div>',
         '<div>',
         f'<span class="kpi-val">{format_id_currency(cost_pred)}</span>',
         '</div>',
-        '<div class="kpi-sub" style="margin-top:4px;">',
-        f'<span class="badge-pill-orange">⚡ Tarif {format_id_currency(TARIF_PER_KWH)}</span> ',
-        '<span style="color:#6B6259; font-weight:500; font-size:12px;">per kWh</span>',
+        '<div class="kpi-sub" style="margin-top:6px;">',
+        f'<span class="badge-pill-blue">⚡ Tarif {format_id_currency(TARIF_PER_KWH)}</span> ',
+        '<span style="color:#6B7280; font-weight:500; font-size:12px;">per kWh</span>',
         '</div>',
         '</div>',
     ])
     st.markdown(card3_html, unsafe_allow_html=True)
 
-st.markdown("<div style='margin: 1.25rem 0;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # 3 & 6. Pembuatan Grafik Plotly & Pengecekan Kapasitas
@@ -287,7 +286,7 @@ else:
     pred_plot_x = pred_x
     pred_plot_y = pred_y
 
-# 1. Garis Aktual: Oranye Terracotta Solid
+# 1. Garis Aktual: Biru Solid #1D6FF2
 if not df_actual_hourly.empty:
     fig.add_trace(
         go.Scatter(
@@ -295,23 +294,23 @@ if not df_actual_hourly.empty:
             y=df_actual_hourly["energy_kwh"],
             mode="lines",
             name="Aktual 72 Jam (kWh)",
-            line=dict(color="#E8590C", width=3, shape="spline"),
+            line=dict(color="#1D6FF2", width=2.5, shape="spline"),
             fill="tozeroy",
-            fillcolor="rgba(232, 89, 12, 0.06)",
+            fillcolor="rgba(29, 111, 242, 0.08)",
             hovertemplate="<b>Aktual</b><br>Waktu: %{x|%d %b %Y, %H:00} WIB<br>Konsumsi: <b>%{y:.2f} kWh</b><extra></extra>",
         )
     )
 
-# 2. Garis Prediksi: Kuning Hangat Putus-putus
+# 2. Garis Prediksi: Amber #F59E0B Putus-putus
 fig.add_trace(
     go.Scatter(
         x=pred_plot_x,
         y=pred_plot_y,
         mode="lines",
         name=f"Prediksi {selected_hours} Jam (kWh)",
-        line=dict(color="#F2C230", width=2.5, dash="dash", shape="spline"),
+        line=dict(color="#F59E0B", width=2.5, dash="dash", shape="spline"),
         fill="tozeroy",
-        fillcolor="rgba(242, 194, 48, 0.06)",
+        fillcolor="rgba(245, 158, 11, 0.05)",
         hovertemplate="<b>Prediksi</b><br>Waktu: %{x|%d %b %Y, %H:00} WIB<br>Prediksi: <b>%{y:.2f} kWh</b><extra></extra>",
     )
 )
@@ -325,64 +324,68 @@ if last_actual_time is not None:
         y0=0,
         y1=1,
         yref="paper",
-        line=dict(color="#6B6259", width=1.5, dash="dot"),
+        line=dict(color="#9CA3AF", width=1.5, dash="dot"),
     )
     fig.add_annotation(
         x=last_actual_time,
-        y=1,
+        y=1.0,
         yref="paper",
         text="Batas Aktual / Mulai Prediksi",
         showarrow=False,
         xanchor="right",
-        yanchor="bottom",
-        font=dict(size=12, color="#6B6259"),
+        yanchor="top",
+        font=dict(size=12, color="#6B7280"),
+        bgcolor="rgba(255, 255, 255, 0.8)",
+        borderpad=4,
     )
 
-style_plotly_fig(fig, height=380)
+style_plotly_fig(fig, height=360)
 fig.update_layout(
     legend=dict(
         orientation="h",
+        yref="paper",
+        y=1.08,
         yanchor="bottom",
-        y=1.02,
-        xanchor="right",
         x=1,
-        font=dict(size=12, color="#6B6259"),
+        xanchor="right",
+        font=dict(size=11, color="#6B7280"),
     ),
-    margin=dict(l=20, r=20, t=30, b=30),
+    margin=dict(l=20, r=20, t=60, b=30),
     hovermode="x unified",
 )
 fig.update_xaxes(
     title_text="Waktu (WIB)",
-    tickfont=dict(size=12, color="#6B6259"),
-    title_font=dict(size=12, color="#6B6259"),
+    title_standoff=12,
+    tickfont=dict(size=11, color="#6B7280"),
+    title_font=dict(size=11, color="#6B7280"),
 )
 fig.update_yaxes(
     title_text="Konsumsi Energi (kWh)",
-    tickfont=dict(size=12, color="#6B6259"),
-    title_font=dict(size=12, color="#6B6259"),
+    tickfont=dict(size=11, color="#6B7280"),
+    title_font=dict(size=11, color="#6B7280"),
+    range=[0, float(max(pred_plot_y)) * 1.25],
 )
 
 # Tampilkan Kontainer Kartu Grafik
 with st.container(border=True):
     chart_card_header = "".join([
-        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">',
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">',
         '<div>',
-        f'<h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1F1A17;">Proyeksi Beban Konsumsi: {selected_machine_id}</h3>',
-        f'<div style="font-size:12px; color:#6B6259; font-weight:600;">Kurva komparasi data riil 72 jam terakhir terhadap proyeksi model ML {selected_hours} jam ke depan (WIB)</div>',
+        f'<h3 style="margin:0; font-size:1.05rem; font-weight:700; color:#111827;">Proyeksi Beban Konsumsi: {selected_machine_id}</h3>',
+        f'<div style="font-size:12px; color:#6B7280; font-weight:500;">Kurva komparasi data riil 72 jam terakhir terhadap proyeksi model {selected_hours} jam ke depan (WIB)</div>',
         '</div>',
         '</div>',
     ])
     st.markdown(chart_card_header, unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    # 6. Pengecekan apakah angka prediksi per jam melebihi rated_power_kw mesin
-    # Jangan menyesuaikan atau memotong angka prediksi, hanya tampilkan peringatan
+    # Pengecekan apakah angka prediksi per jam melebihi rated_power_kw mesin
     exceeded_mask = df_preds["predicted_kwh"] > rated_kw
     exceeded_count = int(exceeded_mask.sum())
     if rated_kw > 0 and exceeded_count > 0:
         max_pred_val = float(df_preds["predicted_kwh"].max())
         warning_capacity_html = "".join([
-            '<div style="font-size:12px; color:#E8590C; font-weight:600; padding:8px 12px; background:rgba(232,89,12,0.06); border-radius:8px; border:1px solid rgba(232,89,12,0.2); margin-top:8px; display:flex; align-items:center; gap:8px;">',
+            '<div style="font-size:12px; color:#92400E; font-weight:500; padding:9px 14px; background:#FEF3C7; border-radius:8px; border:1px solid #FDE68A; margin-top:10px; display:flex; align-items:center; gap:8px;">',
             '<span>⚠️</span>',
             f'<span><b>Prediksi melebihi kapasitas mesin:</b> Terdeteksi {exceeded_count} jam proyeksi dengan beban di atas rated power ({format_id_num(rated_kw, 1)} kW), nilai tertinggi mencapai {format_id_num(max_pred_val, 2)} kWh.</span>',
             '</div>',
@@ -392,7 +395,7 @@ with st.container(border=True):
 # Footer Info
 st.markdown(
     "".join([
-        '<div style="text-align: right; font-size: 12px; color: #6B6259; margin-top: 20px;">',
+        '<div style="text-align: right; font-size: 12px; color: #6B7280; margin-top: 16px;">',
         f'Mesin: <b>{selected_machine_id}</b> (Kapasitas: <b>{format_id_num(rated_kw, 1)} kW</b>) · Horizon Prediksi: <b>{selected_hours} Jam</b> · Ditampilkan dalam Waktu Indonesia Barat (WIB)',
         '</div>',
     ]),
