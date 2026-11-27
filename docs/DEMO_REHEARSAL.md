@@ -146,7 +146,8 @@ Catatan: reproduksibilitas penuh butuh versi numpy yang sama. Kalau beda versi, 
 
 ## 8. Jangan dilakukan saat demo
 
-- Jangan buka Swagger `/summary` — `alert_count`-nya 0 dan bisa bertentangan dengan dashboard.
+- Jangan buka Swagger `/summary` untuk angka alert/antrean — `alert_count`-nya 0 karena backend baca collection `waste_alerts` yang kosong (tetap terhitung on-the-fly, nggak disimpan). Sudah dicek: endpoint aman (HTTP 200, format valid, angka kWh/biaya plausible), TAPI JANGAN pakai angka `alert_count` untuk narasi demo.
+- Catatan angka: `/summary` total kWh = agregat seluruh 180 hari (~1.040.851 kWh), bukan angka demo 7 hari (36.843,9 kWh). Jangan sampe angka-angka slide tertukar.
 - Jangan regenerate data atau menjalankan generator saat rehearsal/demo.
 - Jangan bilang **"realtime"**.
 - Jangan melebarkan filter tanggal Detail Mesin terlalu jauh (aman 7 hari).
